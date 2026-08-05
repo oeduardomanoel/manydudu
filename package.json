@@ -7,7 +7,20 @@
     "dev": "node --env-file=.env --watch src/server.js",
     "start": "node src/server.js",
     "gateway": "node --env-file=.env src/webhook-gateway.js",
+    "build:landing": "vite build --config landing/vite.config.ts",
     "test": "node --test"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "latest",
+    "postcss": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tailwindcss": "^3.4.17",
+    "typescript": "latest",
+    "vite": "latest"
   },
   "engines": { "node": ">=22" }
 }

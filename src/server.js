@@ -17,7 +17,10 @@ const config = { verifyToken: env.META_VERIFY_TOKEN || "", appSecret: env.META_A
 const publicRoot = join(process.cwd(), "public");
 const mime = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
 async function serveStatic(_request, response, pathname) {
-  const requested = pathname === "/" ? "index.html" : pathname === "/visagismo" ? "visagismo.html" : pathname.slice(1);
+  const requested = pathname === "/" ? "index.html"
+    : pathname === "/visagismo" ? "visagismo.html"
+      : pathname === "/dm-propria" || pathname === "/dm-propria/" ? "dm-propria/index.html"
+        : pathname.slice(1);
   const file = normalize(join(publicRoot, requested));
   if (!file.startsWith(publicRoot)) { response.writeHead(403); return response.end(); }
   try { const body = await readFile(file); response.writeHead(200, { "Content-Type": mime[extname(file)] || "application/octet-stream" }); response.end(body); }

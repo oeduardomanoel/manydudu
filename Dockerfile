@@ -3,9 +3,10 @@ FROM node:22-bookworm-slim
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 COPY . .
+RUN npm run build:landing
 
 ENV NODE_ENV=production
 ENV PORT=3000
