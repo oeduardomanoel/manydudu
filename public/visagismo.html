@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f4f1ea">
+  <title>Meu Corte Ideal · Descubra seu corte ideal</title>
+  <link rel="stylesheet" href="/visagismo.css">
+  <link rel="stylesheet" href="/visagismo-media.css">
+</head>
+<body>
+  <!--
+  THESIS: uma consulta visual que parece um espelho orientado, não um quiz genérico de cartões.
+  OWN-WORLD: papel mineral, tinta grafite, azul-petróleo e marcações inspiradas em fichas de salão.
+  STORY: a pessoa identifica sua intenção, envia uma foto, recebe uma prévia útil e libera o guia por R$27.
+  FIRST VIEWPORT: promessa e demonstração dividem a tela; a ação inicia o diagnóstico sem esconder a oferta.
+  FORM: fluxo Persuade mobile-first, linear, com uma decisão por tela e resultado concentrado na escolha do corte.
+  -->
+  <header class="topbar">
+    <a class="wordmark" href="/visagismo" aria-label="Meu Corte Ideal, início"><img src="/assets/meu-corte-ideal/logo-mark.png" alt=""><strong>Meu Corte Ideal</strong></a>
+    <div class="trust"><i></i> análise privada</div>
+  </header>
+
+  <main>
+    <section id="intro" class="intro" hidden>
+      <div class="intro-copy">
+        <p class="kicker">ANÁLISE DE CORTE PERSONALIZADA</p>
+        <h1>Seu próximo corte pode valorizar seu rosto ou esconder seus melhores traços.</h1>
+        <p class="lede">Envie uma foto e receba uma análise visual personalizada, sete referências de corte e um guia simples para mostrar ao seu cabeleireiro.</p>
+        <button class="cta" id="start">Descobrir meu corte ideal <span>→</span></button>
+        <div class="facts"><span>≈ 2 minutos</span><span>Pagamento único</span><span>Sem assinatura</span></div>
+      </div>
+      <figure class="face-study">
+        <img src="/assets/meu-corte-ideal/hair-directions.png" alt="Quatro pessoas com diferentes tipos e estilos de corte de cabelo">
+        <figcaption><strong>7 referências personalizadas</strong><span>Formato · textura · rotina</span></figcaption>
+      </figure>
+    </section>
+
+    <section id="quiz" class="quiz" aria-live="polite">
+      <div class="quiz-meta">
+        <button id="back" class="back" type="button" aria-label="Voltar à pergunta anterior">←</button>
+        <div class="progress-track"><span id="progress"></span></div>
+        <span id="step-label">1 de 8</span>
+      </div>
+      <div id="question" class="question"></div>
+    </section>
+
+    <section id="processing" class="processing" hidden aria-live="polite">
+      <div class="scan"><div id="scan-preview" class="scan-preview"></div><span></span></div>
+      <p class="kicker">LENDO PROPORÇÕES E PREFERÊNCIAS</p>
+      <h2>Preparando sua prévia…</h2>
+      <ul id="process-list"><li>Mapeando formato facial</li><li>Combinando cabelo e rotina</li><li>Selecionando direções de corte</li></ul>
+    </section>
+
+    <section id="result" class="result" hidden>
+      <div class="result-head">
+        <p class="kicker">PRÉVIA ORIENTATIVA</p>
+        <h2><span id="result-name">Sua</span> direção de corte está pronta.</h2>
+        <p id="result-summary"></p>
+      </div>
+      <div class="result-board">
+        <article class="recommendation">
+          <span>MELHOR DIREÇÃO</span>
+          <h3 id="direction-title">Equilíbrio com movimento</h3>
+          <p id="direction-copy"></p>
+          <div id="result-tags" class="tags"></div>
+        </article>
+        <article class="locked">
+          <div class="locked-photo" id="locked-photo" aria-label="Prévia protegida da sua análise">
+            <div class="locked-photo-copy"><b>Seu corte mais indicado está aqui</b><span>Libere para ver a referência sem desfoque</span></div>
+          </div>
+          <div class="locked-lines"><i></i><i></i><i></i></div>
+          <span>RELATÓRIO COMPLETO</span>
+          <h3>7 referências escolhidas para você</h3>
+          <ul><li>Seu formato facial explicado</li><li>O que pedir ao cabeleireiro</li><li>Comprimento, volume e acabamento</li><li>3 estilos que devem ser evitados</li><li>Cartão visual para levar ao salão</li></ul>
+        </article>
+      </div>
+      <div class="offer">
+        <div class="offer-copy">
+          <p>SEU GUIA ESTÁ PRONTO</p>
+          <h3>Veja o corte antes de pedir a tesoura.</h3>
+          <span>Leve referências que combinam com o seu rosto e mostre ao cabeleireiro exatamente o que você quer.</span>
+          <ul><li>7 cortes escolhidos para você</li><li>O que pedir e o que evitar</li><li>Guia visual para levar ao salão</li></ul>
+        </div>
+        <div class="offer-buy">
+          <div class="offer-price"><small>De R$ 67 por</small><strong>R$ 27</strong><em>pagamento único</em></div>
+          <button class="cta" id="unlock">Quero ver meu corte ideal <span>→</span></button>
+          <p>Você tem 7 dias para pedir seu dinheiro de volta. Sem assinatura.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="checkout" class="checkout" hidden>
+      <button class="back-link" id="close-checkout">← Voltar à análise</button>
+      <div class="checkout-copy">
+        <figure class="checkout-preview">
+          <div class="checkout-preview-image" id="checkout-preview-image"></div>
+          <figcaption><span>PRÉVIA DO SEU NOVO VISUAL</span><b>Seu resultado está protegido</b><small>Libere o guia para ver a imagem e as 7 referências sem desfoque.</small></figcaption>
+        </figure>
+        <p class="kicker">FALTA SÓ LIBERAR O SEU GUIA</p><h2>O próximo corte não precisa ser mais uma aposta.</h2><p>Você já respondeu ao quiz e enviou sua foto. Agora é só liberar as referências feitas para o seu rosto.</p><ul><li>7 cortes compatíveis com você</li><li>Instruções simples para o cabeleireiro</li><li>3 estilos que podem esconder seus melhores traços</li><li>Acesso imediato após o pagamento</li></ul><div class="checkout-guarantee"><b>7 dias para decidir com calma</b><span>Se o guia não ajudar, você pode pedir o dinheiro de volta.</span></div>
+      </div>
+      <form id="checkout-form" class="checkout-box">
+        <div class="checkout-price"><span>Análise Meu Corte Ideal<small>Seu guia completo, sem assinatura</small></span><strong>R$ 27</strong><small>pagamento único</small></div>
+        <label>E-mail para receber o guia<input id="checkout-email" type="email" autocomplete="email" required placeholder="voce@email.com"></label>
+        <button class="cta" type="submit">Liberar meu guia agora <span>→</span></button>
+        <p class="form-status" id="checkout-status"></p>
+        <small class="secure-note">Pagamento protegido · acesso imediato · garantia de 7 dias</small>
+      </form>
+    </section>
+  </main>
+  <footer><span>Meu Corte Ideal</span><p>Análise orientativa de estilo. Não substitui avaliação profissional presencial.</p></footer>
+  <script type="module" src="/visagismo.js"></script>
+</body>
+</html>

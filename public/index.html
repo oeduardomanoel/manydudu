@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ManyDudu · Automação que conversa</title><link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="grain"></div>
+  <aside>
+    <a class="brand" href="/"><span>MD</span> manydudu</a>
+    <nav><button class="active" data-scroll="top">◈ <span>Visão geral</span></button><button data-scroll="contents">▣ <span>Conteúdos</span></button><button data-scroll="automations">⌁ <span>Automações</span></button><button data-scroll="activity-panel">◎ <span>Atividade</span></button></nav>
+    <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div></div>
+  </aside>
+  <main id="top">
+    <header><div><p class="eyebrow">ESTÚDIO DE CONVERSAS</p><h1>Seus comentários,<br><em>em movimento.</em></h1></div><button class="primary" id="new-rule">＋ Nova automação</button></header>
+    <section class="stats"><article><span>Automações ativas</span><strong id="active-count">0</strong><i>↗</i></article><article><span>Respostas enviadas</span><strong id="sent-count">0</strong><i>↗</i></article><article><span>Taxa de resposta</span><strong id="response-rate">—</strong><i>↗</i></article></section>
+    <section class="media-section" id="contents">
+      <div class="section-head"><div><p class="eyebrow">BIBLIOTECA DO INSTAGRAM</p><h2>Escolha onde a conversa começa.</h2></div><div class="filters"><button class="filter active" data-filter="REELS">Reels</button><button class="filter" data-filter="ALL">Todos</button><button class="icon-btn refresh" id="refresh-media" title="Atualizar conteúdos">↻</button></div></div>
+      <div id="media-grid" class="media-grid"><div class="media-loading">Buscando seus conteúdos no Instagram…</div></div>
+    </section>
+    <section class="moderation-section" id="moderation">
+      <div class="section-head"><div><p class="eyebrow">MODERAÇÃO</p><h2>Comentários recentes</h2></div><div class="moderation-tools"><input id="moderation-search" type="search" placeholder="Buscar comentário ou pessoa"><select id="moderation-filter"><option value="all">Todos</option><option value="visible">Visíveis</option><option value="hidden">Ocultos</option></select><button class="icon-btn" id="refresh-comments" title="Atualizar comentários">↻</button></div></div>
+      <div id="moderation-list" class="moderation-list"><p class="empty">Buscando comentários...</p></div>
+    </section>
+    <section class="analytics-section" id="analytics">
+      <div class="section-head"><div><p class="eyebrow">CONVERSÃO</p><h2>Do comentário à entrega</h2></div><span id="analytics-period">histórico registrado</span></div>
+      <div id="funnel" class="funnel"><p class="empty">Calculando resultados...</p></div>
+      <div id="rule-metrics" class="rule-metrics"></div>
+    </section>
+    <section class="contacts-section" id="contacts">
+      <div class="section-head"><div><p class="eyebrow">PESSOAS</p><h2>Contatos e histórico</h2></div><label class="contact-search">Buscar<input id="contact-search" type="search" placeholder="Nome, tag ou mensagem"></label></div>
+      <div class="contacts-layout"><div id="contacts-list" class="contacts-list"><p class="empty">Os contatos aparecerão após uma interação.</p></div><div id="contact-detail" class="contact-detail"><p class="empty">Selecione uma pessoa para ver a jornada completa.</p></div></div>
+    </section>
+    <section class="content-grid">
+      <div class="panel" id="automations"><div class="panel-head"><div><p class="eyebrow">FLUXOS</p><h2>Automações</h2></div><span id="rule-total">0 regras</span></div><div id="rules" class="rule-list"></div></div>
+      <div class="panel activity" id="activity-panel"><div class="panel-head"><div><p class="eyebrow">AO VIVO</p><h2>Atividade</h2></div><span class="live">● conectado</span></div><div id="activity"></div></div>
+    </section>
+  </main>
+  <dialog id="rule-dialog"><form id="rule-form"><div class="dialog-head"><div><p class="eyebrow" id="rule-dialog-mode">NOVA AUTOMAÇÃO</p><h2 id="rule-dialog-title">Quando alguém comentar...</h2></div><button type="button" class="close" data-close="rule-dialog">×</button></div>
+    <div class="scope-card" id="rule-scope"><span class="scope-icon">◎</span><div><small>APLICAR EM</small><strong>Todos os conteúdos</strong></div><button type="button" id="clear-scope">Usar global</button></div>
+    <div class="journey-builder"><div class="journey-heading"><span>JORNADA</span><small>Atualizada automaticamente</small></div><div id="journey-preview" class="journey-preview"></div></div>
+    <input type="hidden" name="mediaId"><input type="hidden" name="mediaTitle">
+    <label>Nome do fluxo<input name="name" placeholder="Enviar catálogo" required></label>
+    <div class="row"><label>Palavra-chave<input name="keyword" placeholder="quero" required></label><label>Combinação<select name="match"><option value="contains">Contém</option><option value="exact">É exatamente</option></select></label></div>
+    <label>Enviar como<select name="responseMode"><option value="private">Mensagem privada</option><option value="public">Resposta pública</option><option value="both">Resposta pública + mensagem privada</option></select></label>
+    <label><span id="primary-reply-label">Mensagem privada inicial</span><textarea name="reply" placeholder="Oi! Acabei de enviar os detalhes para você ✨" maxlength="1000" required></textarea></label>
+    <div class="public-replies" id="public-replies" hidden>
+      <label><span>Respostas públicas alternativas</span><textarea name="publicReplies" rows="6" placeholder="Te chamei no direct, dá uma olhadinha ✨&#10;Acabei de enviar para você. Confere suas solicitações!&#10;Prontinho! O material foi para o seu direct." maxlength="10009"></textarea></label>
+      <div class="field-hint"><span>Uma resposta por linha. O ManyDudu faz um rodízio entre elas.</span><strong id="public-reply-count">0/10</strong></div>
+    </div>
+    <label class="delivery-toggle"><input type="checkbox" name="followUpEnabled"><span><strong>Entregar conteúdo após a resposta</strong><small>A pessoa responde sua primeira DM e recebe o link automaticamente.</small></span><i></i></label>
+    <div class="delivery-fields" id="delivery-fields" hidden>
+      <div class="flow-line"><span>1</span><p><strong>Primeira DM</strong> Use a resposta acima para pedir uma interação. Ex.: “Responda EU QUERO”.</p></div>
+      <div class="api-note"><strong>Por regra do Instagram, esta primeira DM é somente texto.</strong><small>Peça para a pessoa responder “SIM”. A resposta abre a janela de 24 horas e libera as próximas etapas.</small></div>
+      <div class="flow-line"><span>2</span><p><strong>A pessoa responde</strong> O Instagram abre a janela de 24 horas.</p></div>
+      <label class="follow-check"><input type="checkbox" name="requireFollow"><span><strong>Exigir que siga @eduardosantos.ia</strong><small>Verifica o perfil antes de liberar o conteúdo.</small></span></label>
+      <div id="follow-prompt-fields" hidden><label>Mensagem para quem ainda não segue<textarea name="followPrompt" placeholder="Ainda falta um passo: siga @eduardosantos.ia e toque em JÁ SEGUI ✨" maxlength="900">Ainda falta um passo: siga @eduardosantos.ia e depois toque em JÁ SEGUI ✨</textarea></label><label>Link do perfil<input type="url" name="profileUrl" value="https://www.instagram.com/eduardosantos.ia/"></label><div class="row"><label>Botão do perfil<input name="followButtonTitle" maxlength="20" value="SEGUIR PERFIL"></label><label>Botão de confirmação<input name="confirmFollowTitle" maxlength="20" value="JÁ SEGUI"></label></div></div>
+      <label>Mensagem de entrega<textarea name="followUpText" placeholder="Perfeito! Aqui está o material que prometi 👇" maxlength="900"></textarea></label>
+      <label>Link HTTPS<input type="url" name="followUpUrl" placeholder="https://seusite.com/material"></label>
+      <label>Formato da entrega<select name="deliveryStyle"><option value="button">Botão clicável</option><option value="text">Link no texto</option></select></label>
+      <div id="button-fields"><label>Texto do botão<input name="buttonTitle" placeholder="ACESSAR MATERIAL" maxlength="20" value="ACESSAR MATERIAL"></label><div class="button-preview"><small>PRÉVIA NO DIRECT</small><p>Seu material está pronto 👇</p><button type="button" tabindex="-1" id="button-preview-label">ACESSAR MATERIAL</button></div></div>
+    </div>
+    <button class="primary wide" id="save-rule" type="submit">Criar automação →</button><p class="form-error" id="form-error" role="alert"></p>
+  </form></dialog>
+  <dialog id="media-dialog" class="media-dialog"><div class="media-detail"><button type="button" class="close floating" data-close="media-dialog">×</button><div class="media-preview" id="detail-preview"></div><div class="comments-column"><div class="comments-head"><div><p class="eyebrow">CONVERSA NO CONTEÚDO</p><h2 id="detail-title">Comentários</h2></div><button class="primary compact" id="automate-media">＋ Automatizar</button></div><div id="detail-comments" class="comments-list"></div></div></div></dialog>
+  <script type="module" src="/app.js"></script>
+</body></html>

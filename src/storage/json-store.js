@@ -1,0 +1,88 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+
+const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {} };
+
+export class JsonStore {
+  constructor(path) { this.path = path; this.queue = Promise.resolve(); }
+  async initialize() {
+    await mkdir(dirname(this.path), { recursive: true });
+    try { await readFile(this.path); } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      await this.#write(EMPTY);
+    }
+  }
+  async read() { return JSON.parse(await readFile(this.path, "utf8")); }
+  async update(change) {
+    const operation = this.queue.then(async () => { const state = await this.read(); change(state); await this.#write(state); return state; });
+    this.queue = operation.catch(() => {});
+    return operation;
+  }
+  async claimEvent(id) { let claimed = false; await this.update((state) => { if (!state.events[id]) { state.events[id] = Date.now(); claimed = true; } }); return claimed; }
+  async addRule(rule) { await this.update((state) => state.rules.unshift(rule)); return rule; }
+  async replaceRule(id, replacement) {
+    let replaced = false;
+    await this.update((state) => {
+      const index = state.rules.findIndex((rule) => rule.id === id);
+      if (index < 0) return;
+      state.rules[index] = replacement;
+      replaced = true;
+    });
+    return replaced;
+  }
+  async deleteRule(id) { await this.update((state) => { state.rules = state.rules.filter((rule) => rule.id !== id); }); }
+  async toggleRule(id) { await this.update((state) => { const rule = state.rules.find((item) => item.id === id); if (rule) rule.enabled = !rule.enabled; }); }
+  async log(item) { await this.update((state) => { state.activity.unshift(item); state.activity = state.activity.slice(0, 100); }); }
+  async setPendingDelivery(recipientId, delivery) {
+    await this.update((state) => { state.pendingDeliveries ??= {}; state.pendingDeliveries[recipientId] = delivery; });
+  }
+  async getPendingDelivery(recipientId) {
+    const state = await this.read();
+    return state.pendingDeliveries?.[recipientId] ?? null;
+  }
+  async consumePendingDelivery(recipientId) {
+    let delivery = null;
+    await this.update((state) => { state.pendingDeliveries ??= {}; delivery = state.pendingDeliveries[recipientId] ?? null; delete state.pendingDeliveries[recipientId]; });
+    return delivery;
+  }
+  async recordContactEvent(event) {
+    await this.update((state) => {
+      state.contacts ??= {};
+      const current = state.contacts[event.contactId] ?? { id: event.contactId, tags: [], notes: [], history: [] };
+      current.username = event.username || current.username || "instagram";
+      current.lastInteractionAt = event.at;
+      current.history.unshift(event);
+      current.history = current.history.slice(0, 200);
+      state.contacts[event.contactId] = current;
+    });
+  }
+  async listContacts() {
+    const state = await this.read();
+    return Object.values(state.contacts ?? {}).map((contact) => ({ ...contact, interactionCount: contact.history.length }))
+      .sort((left, right) => String(right.lastInteractionAt).localeCompare(String(left.lastInteractionAt)));
+  }
+  async getContact(id) {
+    const state = await this.read();
+    return state.contacts?.[id] ?? null;
+  }
+  async updateContact(id, changes) {
+    let updated = null;
+    await this.update((state) => {
+      const contact = state.contacts?.[id];
+      if (!contact) return;
+      if (Array.isArray(changes.tags)) contact.tags = [...new Set(changes.tags.map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 10);
+      if (typeof changes.follower === "boolean") { contact.follower = changes.follower; contact.followerCheckedAt = new Date().toISOString(); }
+      if (String(changes.note ?? "").trim()) contact.notes.unshift({ text: String(changes.note).trim(), at: new Date().toISOString() });
+      updated = contact;
+    });
+    return updated;
+  }
+  async setContactPaused(id, paused) {
+    await this.update((state) => { if (state.contacts?.[id]) state.contacts[id].automationPaused = Boolean(paused); });
+  }
+  async isContactPaused(id) {
+    const contact = await this.getContact(id);
+    return Boolean(contact?.automationPaused);
+  }
+  async #write(state) { const temporary = `${this.path}.tmp`; await writeFile(temporary, JSON.stringify(state, null, 2)); await rename(temporary, this.path); }
+}
