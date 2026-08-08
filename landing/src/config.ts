@@ -2,9 +2,10 @@ export const siteConfig = {
   productName: "DM Própria",
   price: "R$47",
   checkoutUrl: "#checkout",
-  creatorName: "[NOME DO CRIADOR]",
-  creatorInstagram: "@[INSTAGRAM]",
-  creatorFollowers: "[NÚMERO DE SEGUIDORES]",
+  creatorName: "Eduardo Santos",
+  creatorInstagram: "@eduardosantos.ia",
+  creatorInstagramUrl: "https://instagram.com/eduardosantos.ia",
+  creatorFollowers: "Perfil real no Instagram",
   vslUrl: "",
   guaranteeDays: 7,
   legal: {

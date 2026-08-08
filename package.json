@@ -7,7 +7,9 @@
     "dev": "node --env-file=.env --watch src/server.js",
     "start": "node src/server.js",
     "gateway": "node --env-file=.env src/webhook-gateway.js",
+    "dev:landing": "vite --config landing/vite.config.ts --host 0.0.0.0 --port 5173",
     "build:landing": "vite build --config landing/vite.config.ts",
+    "preview:landing": "vite preview --config landing/vite.config.ts --host 0.0.0.0 --port 4173",
     "test": "node --test"
   },
   "dependencies": {

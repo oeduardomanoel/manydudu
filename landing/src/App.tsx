@@ -31,6 +31,57 @@ function SectionTitle({ eyebrow, title, text, light = false }: { eyebrow?: strin
   </div>;
 }
 
+const demoBuyers = ["Marina", "Rafael", "Camila", "Lucas", "Fernanda", "André"];
+
+function DemoPurchaseToast() {
+  const [visible, setVisible] = useState(false);
+  const [buyerIndex, setBuyerIndex] = useState(0);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const playNotificationSound = () => {
+    const context = audioContextRef.current;
+    if (!context || context.state !== "running") return;
+    const now = context.currentTime;
+    [660, 880].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0, now + index * .09);
+      gain.gain.linearRampToValueAtTime(.045, now + index * .09 + .015);
+      gain.gain.exponentialRampToValueAtTime(.001, now + index * .09 + .16);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(now + index * .09);
+      oscillator.stop(now + index * .09 + .18);
+    });
+  };
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    let hideTimer: number | undefined;
+    const enableSound = () => {
+      audioContextRef.current ??= new AudioContext();
+      void audioContextRef.current.resume();
+    };
+    const show = () => {
+      setBuyerIndex((current) => (current + 1) % demoBuyers.length);
+      setVisible(true);
+      playNotificationSound();
+      hideTimer = window.setTimeout(() => setVisible(false), 5200);
+    };
+    window.addEventListener("pointerdown", enableSound, { once: true });
+    const firstTimer = window.setTimeout(show, 6500);
+    const interval = window.setInterval(show, 28000);
+    return () => { window.removeEventListener("pointerdown", enableSound); window.clearTimeout(firstTimer); window.clearTimeout(hideTimer); window.clearInterval(interval); void audioContextRef.current?.close(); };
+  }, []);
+
+  if (!import.meta.env.DEV) return null;
+  return <aside className={`purchase-toast ${visible ? "is-visible" : ""}`} aria-live="polite" aria-hidden={!visible}>
+    <span className="purchase-toast-icon"><Icon name="check" /></span>
+    <div><small>Notificação</small><strong>{demoBuyers[buyerIndex]} comprou a DM Própria</strong><p>Acesso liberado agora</p></div>
+  </aside>;
+}
+
 const modules = [
   ["Entendendo o que vamos construir", ["Demonstração do resultado final", "Como a automação funciona", "Requisitos necessários", "Organização do projeto"]],
   ["Preparando a máquina", ["Ferramentas necessárias", "Instalação do ambiente", "Organização dos arquivos", "Primeiros testes"]],
@@ -78,7 +129,7 @@ function App() {
   }, []);
 
   return <div className="min-h-screen overflow-hidden bg-cream text-ink">
-    <div className="topbar">Acesso imediato às aulas por apenas R$47</div>
+    <div className="topbar">Comece hoje por R$47 e monte a sua própria automação</div>
     <header className="site-header">
       <div className="shell flex h-16 items-center justify-between">
         <a href="#inicio" className="brand" aria-label="DM Própria, início">DM Própria<span>.</span></a>
@@ -95,100 +146,102 @@ function App() {
       <section id="inicio" className="hero paper-texture">
         <div className="shell grid items-center gap-14 py-14 lg:grid-cols-[1.02fr_.98fr] lg:py-24">
           <div className="reveal">
-            <span className="eyebrow">Crie acompanhando. Teste no mesmo dia.</span>
-            <h1>Crie hoje seu <em>próprio sistema</em> de comentário para DM no Instagram</h1>
-            <p className="hero-copy">Acompanhe aulas rápidas para construir a automação, criar seu frontend, conectar ao Instagram e fazer o primeiro teste ainda hoje, mesmo sem experiência com programação.</p>
-            <div className="benefit-row"><span><Icon name="spark" /> IA gratuita</span><span><Icon name="code" /> Frontend personalizado</span><span><Icon name="check" /> Sem mensalidade local</span></div>
-            <CheckoutButton>Quero criar meu sistema por R$47</CheckoutButton>
-            <p className="microcopy">Acesso imediato <b>•</b> Aulas práticas <b>•</b> Garantia de 7 dias</p>
+            <span className="eyebrow">Pare de deixar comentários sem resposta</span>
+            <h1>Monte sua <em>própria automação</em> de comentário para DM no Instagram</h1>
+            <p className="hero-copy">Quando alguém comentar a palavra que você escolheu, a pessoa recebe sua mensagem no direct. Você monta tudo comigo, conecta ao seu Instagram e faz um teste real, mesmo que nunca tenha programado.</p>
+            <div className="benefit-row"><span><Icon name="spark" /> Ajuda de IA gratuita</span><span><Icon name="code" /> Painel com a sua cara</span><span><Icon name="check" /> Sem mensalidade para usar localmente</span></div>
+            <CheckoutButton>Quero montar a minha por R$47</CheckoutButton>
+            <p className="microcopy">Aulas liberadas na hora <b>•</b> Passo a passo prático <b>•</b> 7 dias de garantia</p>
           </div>
           <div className="relative reveal delay-2">
             <button className="vsl" onClick={() => track("vsl_play")} aria-label="Reproduzir demonstração da automação">
               <div className="vsl-ui"><span>comentário</span><b>QUERO</b><div className="vsl-line" /><span>mensagem enviada</span></div>
               <span className="play"><Icon name="play" className="h-8 w-8" /></span>
-              <strong>Assista à automação funcionando</strong><small>Vídeo de demonstração</small>
+              <strong>Veja o comentário virar uma DM</strong><small>Demonstração real do processo</small>
             </button>
-            <p className="hand-note">Eu mostro o comentário e a mensagem chegando na prática. <span>↙</span></p>
+            <p className="hand-note">Sem enrolação. Você vê o comentário e a mensagem chegando. <span>↙</span></p>
           </div>
         </div>
       </section>
 
       <section id="como-funciona" className="bg-paper py-20">
-        <div className="shell"><SectionTitle eyebrow="Demonstração" title="Na prática, é isso que você vai construir" text="Alguém comenta uma palavra no seu conteúdo. Seu sistema identifica o comentário e envia a mensagem que você configurou." />
+        <div className="shell"><SectionTitle eyebrow="É simples assim" title="A pessoa comenta. Sua mensagem chega no direct." text="Você escolhe a palavra e escreve a resposta. O sistema cuida do caminho entre uma coisa e outra." />
           <div className="flow-grid">
             <article><span className="step">01</span><Icon name="message" /><h3>A pessoa comenta</h3><div className="comment-pill">QUERO</div></article>
             <article><span className="step">02</span><Icon name="code" /><h3>O sistema identifica</h3><div className="flow-line"><i /><i /><i /></div></article>
             <article><span className="step">03</span><Icon name="spark" /><h3>A mensagem chega na DM</h3><div className="dm-bubble">Aqui está o material que você pediu.</div></article>
           </div>
-          <p className="center-note">Pode ser um link, uma aula, um produto, um grupo, um cupom ou outro material.</p>
+          <p className="center-note">Envie o que fizer sentido para o seu conteúdo: um link, uma aula, um produto, um grupo ou um cupom.</p>
         </div>
       </section>
 
       <section className="py-24"><div className="shell grid items-center gap-16 lg:grid-cols-2">
-        <div><SectionTitle eyebrow="O ponto de partida" title="Talvez você só queira uma função simples" />
-          <div className="story"><p>Eu queria que alguém comentasse uma palavra no meu post e recebesse uma mensagem na DM. <strong>Só isso.</strong></p><p>Mas, para usar essa função, normalmente você precisa entrar em mais uma plataforma, entender planos, limites e colocar outra mensalidade no negócio.</p><p>Então resolvi criar minha própria estrutura. Depois organizei o processo em aulas rápidas para você conseguir repetir na sua máquina.</p></div>
+        <div><SectionTitle eyebrow="Foi assim que começou" title="Eu só queria responder comentários sem pagar mais uma mensalidade" />
+          <div className="story"><p>Eu queria uma coisa bem simples: a pessoa comenta uma palavra e recebe o material no direct. <strong>Sem eu precisar responder uma por uma.</strong></p><p>As opções que encontrei vinham com planos, limites e outra cobrança todo mês. Para uma função tão direta, isso não fazia sentido para mim.</p><p>Então montei minha própria estrutura. Quando vi tudo funcionando no meu Instagram, transformei o processo em aulas para você conseguir fazer o mesmo.</p></div>
+          <div className="savings-card"><span>O custo que deixa de se repetir</span><strong>Pague R$47 uma vez. A conta não volta no mês seguinte.</strong><p>Ferramentas completas de automação podem passar de R$500 por mês nos planos maiores. Se você quer principalmente transformar comentários em mensagens, pode montar essa função na sua própria estrutura e parar de pagar por recursos que não usa.</p><small>O uso local não tem mensalidade. Serviços opcionais de hospedagem podem ter custo próprio.</small></div>
         </div>
         <VisualSystem />
       </div></section>
 
       <section className="dark-section"><div className="shell grid gap-12 py-24 lg:grid-cols-[1fr_.75fr] lg:items-center">
-        <div><SectionTitle eyebrow="Começando do zero" title="Você não precisa chegar sabendo programar" light />
-          <div className="space-y-4 text-lg leading-relaxed text-white/70"><p>Durante as aulas, eu faço o processo na minha tela e você replica na sua.</p><p>Você vai usar inteligência artificial gratuita para ajudar na construção, mas não vai ficar apenas copiando um código sem entender o que está acontecendo.</p><p>Primeiro fazemos a estrutura funcionar. Depois você pode mudar o visual, os textos, os campos e adaptar o frontend para o seu projeto.</p></div>
+        <div><SectionTitle eyebrow="Você começa do começo" title="Não precisa saber programar para acompanhar" light />
+          <div className="space-y-4 text-lg leading-relaxed text-white/70"><p>Eu faço cada etapa na minha tela. Você acompanha e repete na sua máquina.</p><p>A inteligência artificial ajuda com a parte técnica, e eu mostro o que cada passo está fazendo. Você não fica sozinho diante de um monte de código.</p><p>Primeiro colocamos a automação para rodar. Depois você muda as cores, os textos e as opções do painel para deixar tudo com a sua cara.</p></div>
         </div>
         <blockquote>Primeiro faça funcionar.<br /><em>Depois deixe com a sua cara.</em></blockquote>
       </div></section>
 
-      <section className="py-24"><div className="shell"><SectionTitle eyebrow="Passo a passo" title="O caminho entre entrar no treinamento e ver a primeira DM chegando" />
+      <section className="py-24"><div className="shell"><SectionTitle eyebrow="Você faz junto comigo" title="Quatro etapas até a primeira mensagem chegar" />
         <div className="method-grid">{[
           ["Prepare sua máquina", "Instale as ferramentas necessárias e deixe o ambiente pronto acompanhando o passo a passo."],
           ["Construa a estrutura", "Use os comandos e a IA gratuita para criar a base do sistema junto com as aulas."],
           ["Monte seu frontend", "Crie o painel para configurar palavras, mensagens, links e outras opções."],
           ["Conecte e teste", "Conecte ao Instagram, faça um comentário real e veja a mensagem chegando na DM."],
         ].map(([title, text], i) => <article key={title}><span>0{i + 1}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
-        <p className="center-note">Replicando corretamente as etapas, você consegue concluir o processo no mesmo dia.</p>
+        <p className="center-note">Se você separar algumas horas e acompanhar as etapas, pode terminar o dia com o primeiro teste feito.</p>
       </div></section>
 
-      <section id="resultado" className="bg-sand py-24"><div className="shell"><SectionTitle eyebrow="O resultado" title="No fim do treinamento, não será apenas uma pasta cheia de códigos" />
+      <section id="resultado" className="bg-sand py-24"><div className="shell"><SectionTitle eyebrow="O que fica com você" title="No final, você terá algo seu e funcionando" />
         <div className="result-layout"><ul>{["Um sistema criado na sua própria máquina", "Um frontend que você mesmo construiu", "Uma automação real conectada ao Instagram"].map(x => <li key={x}><Icon name="check" />{x}</li>)}</ul><DashboardMockup /><ul>{["Liberdade para adaptar textos e aparência", "Conhecimento para repetir o processo", "Uma habilidade que pode ser oferecida como serviço"].map(x => <li key={x}><Icon name="check" />{x}</li>)}</ul></div>
-        <p className="center-note max-w-2xl">O objetivo não é ensinar programação durante semanas. É levar você do zero até uma automação funcionando.</p>
+        <p className="center-note max-w-2xl">Você não precisa virar programador. Precisa sair com uma automação que entende, consegue usar e sabe ajustar.</p>
       </div></section>
 
-      <section className="py-24"><div className="shell"><SectionTitle eyebrow="Possibilidades" title="O que você pode entregar pela DM" text="Você escolhe a palavra que ativa o sistema e a mensagem que a pessoa vai receber." />
+      <section className="py-24"><div className="shell"><SectionTitle eyebrow="Você decide o que enviar" title="Transforme um comentário em uma entrega automática" text="Escolha a palavra que ativa o sistema e o que a pessoa vai receber no direct." />
         <div className="application-grid">{["Link de uma página de vendas", "E-book ou material gratuito", "Aula gravada", "Convite para um grupo", "Cupom de desconto", "Formulário de orçamento", "Catálogo ou cardápio", "Chamada para atendimento"].map((x, i) => <article key={x}><span>{String(i + 1).padStart(2, "0")}</span>{x}</article>)}</div>
       </div></section>
 
-      <section className="bg-sand py-24"><div className="shell grid items-center gap-14 lg:grid-cols-[.85fr_1.15fr]"><WorkspaceVisual /><div><span className="eyebrow">Use no seu negócio ou transforme em serviço</span><h2>Você também pode usar o que aprendeu para criar sistemas para outras pessoas</h2><div className="story"><p>Você pode montar a automação para usar no seu perfil. Mas também existe muito produtor, afiliado, criador e negócio local que gostaria de ter algo assim e não sabe como construir.</p><p>Depois de aprender o processo, você pode adaptar o frontend para outros projetos e oferecer a criação como serviço.</p><p><strong>Não significa que clientes aparecerão automaticamente.</strong> Significa que você terá uma habilidade prática para colocar no seu portfólio e oferecer.</p></div></div></div></section>
+      <section id="servico" className="bg-sand py-24"><div className="shell service-grid"><WorkspaceVisual /><div className="service-copy"><span className="eyebrow">Use no seu perfil ou crie para outras pessoas</span><h2>Depois de fazer a sua, você pode montar automações para clientes</h2><div className="story"><p>Produtores, afiliados, criadores e negócios locais recebem comentários todos os dias. Muitos gostariam de responder pelo direct, mas não sabem por onde começar.</p><p>Quando você aprende o processo, consegue trocar o visual, os textos e a mensagem para adaptar o sistema a outros projetos.</p><p><strong>O treinamento não promete clientes.</strong> Ele entrega uma habilidade prática que você pode mostrar no portfólio e oferecer com segurança.</p></div></div></div></section>
 
-      <section id="conteudo" className="py-24"><div className="shell grid gap-16 lg:grid-cols-[.75fr_1.25fr]"><div className="lg:sticky lg:top-28 lg:self-start"><SectionTitle eyebrow="Por dentro" title="O que você vai aprender nas aulas" text="Videoaulas curtas, práticas e organizadas na ordem em que você precisa executar." /><CheckoutButton className="mt-7">Quero acompanhar as aulas</CheckoutButton></div><div className="accordion-list">{modules.map(([title, items], i) => <details key={title} open={i === 0}><summary><span>Módulo {i + 1}</span><strong>{title}</strong><b>+</b></summary><ul>{items.map(item => <li key={item}><Icon name="check" />{item}</li>)}</ul></details>)}</div></div></section>
+      <section id="conteudo" className="py-24"><div className="shell grid gap-16 lg:grid-cols-[.75fr_1.25fr]"><div className="lg:sticky lg:top-28 lg:self-start"><SectionTitle eyebrow="Por dentro das aulas" title="Você aprende na ordem em que precisa fazer" text="Aulas curtas, com tela compartilhada e uma tarefa clara em cada etapa." /><CheckoutButton className="mt-7">Quero fazer junto</CheckoutButton></div><div className="accordion-list">{modules.map(([title, items], i) => <details key={title} open={i === 0}><summary><span>Módulo {i + 1}</span><strong>{title}</strong><b>+</b></summary><ul>{items.map(item => <li key={item}><Icon name="check" />{item}</li>)}</ul></details>)}</div></div></section>
 
       {/* Os bônus abaixo podem ser removidos ou alterados facilmente. */}
-      <section className="bg-paper py-24"><div className="shell"><SectionTitle eyebrow="Materiais complementares" title="Bônus para deixar o processo mais claro" /><div className="bonus-grid">{[
-        ["Checklist de construção", "Uma lista organizada para acompanhar cada etapa e confirmar que tudo foi configurado corretamente."],
-        ["Guia de erros comuns", "Orientações para identificar os problemas que mais aparecem durante instalação e conexão."],
-        ["Ideias para usar a automação", "Exemplos de aplicação para produtos, serviços, aulas, grupos e materiais gratuitos."],
+      <section className="bg-paper py-24"><div className="shell"><SectionTitle eyebrow="Para não travar no caminho" title="Três bônus que você realmente vai usar" /><div className="bonus-grid">{[
+        ["Checklist de construção", "Veja o que já fez, o que falta e onde conferir antes de testar."],
+        ["Guia de erros comuns", "Encontre mais rápido os problemas que costumam aparecer na instalação e na conexão."],
+        ["Ideias para usar a automação", "Tenha exemplos prontos para produtos, serviços, aulas, grupos e materiais gratuitos."],
       ].map(([title, text], i) => <article key={title}><span>Bônus 0{i + 1}</span><h3>{title}</h3><p>{text}</p></article>)}</div></div></section>
 
-      <section className="py-24"><div className="shell creator-grid"><div className="creator-placeholder"><span>FOTO REAL<br />DO CRIADOR</span></div><div><SectionTitle eyebrow="Quem vai te mostrar o processo" title={`Eu sou ${siteConfig.creatorName}.`} /><div className="story"><p>Eu criei essa automação porque queria uma forma simples de transformar comentários em mensagens sem precisar contratar uma ferramenta completa apenas para essa função.</p><p>Depois de colocar o sistema para funcionar no meu próprio Instagram, organizei o processo em aulas práticas.</p><p>Não é um treinamento cheio de teoria. Eu faço na minha tela e você acompanha fazendo na sua.</p></div><div className="creator-meta"><span>{siteConfig.creatorInstagram}</span><span>{siteConfig.creatorFollowers}</span><span>[PROVA DE USO NO PERFIL]</span></div></div></div></section>
+      <section className="py-24"><div className="shell creator-grid"><figure className="creator-photo"><img src={`${import.meta.env.BASE_URL}eduardo-santos.jpg`} alt="Eduardo Santos trabalhando em seu computador" loading="lazy" /><figcaption>Eduardo construindo e testando o sistema</figcaption></figure><div><SectionTitle eyebrow="Quem vai fazer junto com você" title={`Eu sou ${siteConfig.creatorName}.`} /><div className="story"><p>Eu criei essa automação porque não queria pagar por uma ferramenta inteira para usar uma única função.</p><p>Depois de colocar tudo para rodar no meu Instagram, refiz o processo com calma e organizei cada etapa em aulas.</p><p>Você não vai passar horas ouvindo teoria. Eu abro minha tela, faço e explico. Você acompanha na sua.</p></div><div className="creator-meta"><a href={siteConfig.creatorInstagramUrl} target="_blank" rel="noreferrer">{siteConfig.creatorInstagram}</a><span>{siteConfig.creatorFollowers}</span><span>Demonstração feita no perfil</span></div></div></div></section>
 
       <section className="proof-section"><div className="shell"><SectionTitle eyebrow="Provas reais" title="Pessoas criando a própria automação" text="Esta seção está preparada para receber resultados reais assim que estiverem disponíveis." /><div className="proof-grid">{["Print do sistema funcionando", "Comentário do aluno", "Frontend criado pelo aluno"].map(x => <article key={x}><div>PLACEHOLDER</div><p>{x}</p></article>)}</div></div></section>
 
-      <section id="checkout" ref={priceRef} className="offer-wrap"><div className="shell"><div className="offer-card"><div><span className="eyebrow">Acesso imediato</span><h2>Comece hoje a criar sua DM Própria</h2><ul>{["Treinamento completo", "Construção do sistema", "Criação do frontend", "Integração com Instagram", "Aula de manutenção", "Materiais complementares", "Acesso imediato"].map(x => <li key={x}><Icon name="check" />{x}</li>)}</ul></div><div className="price-box"><span>Pagamento único</span><strong>R$<b>47</b></strong><p>à vista</p><CheckoutButton dark>Quero começar agora</CheckoutButton><small><Icon name="shield" /> Compra processada em ambiente seguro</small></div></div></div></section>
+      <section id="checkout" ref={priceRef} className="offer-wrap"><div className="shell"><div className="offer-card"><div className="offer-content"><span className="eyebrow">Comece quando quiser</span><h2>Chega de responder tudo na mão</h2><p className="offer-description">Entre hoje e monte uma automação que entrega sua mensagem no direct enquanto você cuida do conteúdo e do seu negócio.</p><h3 className="offer-includes-title">Você recebe tudo para sair do zero</h3><ul>{["Treinamento completo e prático", "Construção do sistema do zero", "Painel personalizado", "Conexão com o Instagram", "Aula de manutenção", "Acesso imediato às aulas", "Bônus: checklist de construção", "Bônus: guia de erros comuns", "Bônus: ideias para usar a automação"].map(x => <li key={x}><Icon name="check" />{x}</li>)}</ul></div><div className="price-box"><span>DM Própria</span><p className="price-caption">Acesso completo • pagamento único</p><strong><small>R$</small><b>47</b></strong><p className="price-note">uma vez só, sem assinatura</p><CheckoutButton dark>Quero parar de responder na mão</CheckoutButton><small className="secure-note"><Icon name="shield" /> Compra segura • 7 dias de garantia</small></div></div></div></section>
 
-      <section className="py-20"><div className="shell guarantee"><Icon name="shield" className="h-12 w-12" /><div><h2>Você tem 7 dias para conhecer o treinamento</h2><p>Depois de entrar, você poderá acessar as aulas e avaliar o conteúdo. Caso perceba que o treinamento não é para você, poderá solicitar o reembolso dentro do prazo legal informado na página de compra.</p></div></div></section>
+      <section className="py-20"><div className="shell guarantee"><Icon name="shield" className="h-12 w-12" /><div><h2>Veja as aulas com calma por 7 dias</h2><p>Entre, assista e avalie se o treinamento faz sentido para você. Se não fizer, peça o reembolso dentro do prazo informado na compra.</p></div></div></section>
 
       <section id="duvidas" className="bg-paper py-24"><div className="shell grid gap-16 lg:grid-cols-[.7fr_1.3fr]"><SectionTitle eyebrow="Perguntas frequentes" title="Antes de começar, vale saber" /><div className="accordion-list faq">{faqs.map(([q, a]) => <details key={q}><summary><strong>{q}</strong><b>+</b></summary><p>{a}</p></details>)}</div></div></section>
 
-      <section className="final-cta"><div className="shell"><span className="eyebrow">Seu projeto começa aqui</span><h2>Você pode terminar hoje com sua própria automação funcionando</h2><p>Entre, acompanhe as aulas na ordem e replique cada etapa na sua máquina.</p><CheckoutButton>Criar minha DM Própria por R$47</CheckoutButton><small>Acesso imediato após a confirmação do pagamento</small></div></section>
+      <section className="final-cta"><div className="shell"><span className="eyebrow">Comece pela primeira aula</span><h2>Seu próximo comentário pode receber uma resposta automática</h2><p>Monte comigo, faça o teste no seu Instagram e pare de depender de respostas manuais.</p><CheckoutButton>Quero montar a minha por R$47</CheckoutButton><small>Acesso liberado após a confirmação do pagamento</small></div></section>
     </main>
 
     <footer><div className="shell"><div className="footer-top"><a className="brand" href="#inicio">DM Própria<span>.</span></a><nav><a href={siteConfig.legal.terms}>Termos de uso</a><a href={siteConfig.legal.privacy}>Política de privacidade</a><a href={siteConfig.legal.contact}>Contato</a><a href="#">Instagram do criador</a></nav></div><div className="legal"><p>O DM Própria é um treinamento educacional independente. Não possui vínculo, parceria ou afiliação com Instagram, Meta, ManyChat, Claude ou Anthropic. Marcas eventualmente mencionadas pertencem aos seus respectivos proprietários. O funcionamento de integrações pode ser afetado por requisitos, políticas e mudanças realizadas pelas plataformas utilizadas.</p><p>Os resultados dependem da aplicação individual. O treinamento não oferece garantia de faturamento ou obtenção de clientes.</p></div></div></footer>
 
     {stickyVisible && !stickyClosed && <div className="mobile-sticky"><button onClick={() => setStickyClosed(true)} aria-label="Fechar barra">×</button><CheckoutButton>Criar meu sistema • R$47</CheckoutButton></div>}
+    <DemoPurchaseToast />
   </div>;
 }
 
 function VisualSystem() {
-  return <div className="visual-system" aria-label="Placeholder visual do fluxo entre comentário, sistema e mensagem"><div className="insta-card"><small>PUBLICAÇÃO NO INSTAGRAM</small><div className="post-photo" /><p><b>@pessoa</b> QUERO</p></div><div className="curved-arrow">↘</div><div className="mini-panel"><span>DM PRÓPRIA</span><i /><i /><button>Automação ativa</button></div><div className="dm-card"><small>NOVA MENSAGEM</small><p>Aqui está o material que você pediu.</p></div></div>;
+  return <div className="visual-system" aria-label="Fluxo entre publicação, comentário, sistema e mensagem"><div className="insta-card"><small>PUBLICAÇÃO NO INSTAGRAM</small><img className="post-photo" src={`${import.meta.env.BASE_URL}instagram-post-token-hacks.png`} alt="Post de Eduardo Santos sobre hacks para economizar tokens no Claude" loading="lazy" /><p><b>@pessoa</b> QUERO</p></div><div className="curved-arrow">↘</div><div className="mini-panel"><span>DM PRÓPRIA</span><i /><i /><button>Automação ativa</button></div><div className="dm-card"><small>NOVA MENSAGEM</small><p>Aqui está o material que você pediu.</p></div></div>;
 }
 
 function DashboardMockup() {
@@ -196,7 +249,7 @@ function DashboardMockup() {
 }
 
 function WorkspaceVisual() {
-  return <div className="workspace-visual"><div className="workspace-photo"><span>PESSOA PERSONALIZANDO<br />UM PROJETO</span></div><div className="floating-code"><i />background: <b>#F4EFE7</b><br />mensagem: <b>"Seu link"</b></div></div>;
+  return <div className="workspace-visual"><div className="workspace-photo"><img src={`${import.meta.env.BASE_URL}manydudu-dashboard-mockup.png`} alt="Painel do ManyDudu configurando uma automação de comentário para mensagem privada" loading="lazy" /></div><div className="floating-code"><span>palavra-chave</span><b>QUERO</b><span>resposta</span><b>Seu link</b></div></div>;
 }
 
 export default App;

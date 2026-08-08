@@ -4,17 +4,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        cream: "#F4EFE7",
-        paper: "#FAF8F4",
-        sand: "#E8DFD3",
-        terra: { DEFAULT: "#C96442", light: "#DA8060", dark: "#984A32" },
-        ink: "#1D1D1B",
-        graphite: "#494742",
-        muted: "#767169",
-        confirm: "#3F7258",
+        cream: "#070707",
+        paper: "#0C0C0C",
+        sand: "#111111",
+        terra: { DEFAULT: "#FF5A1F", light: "#FF8A45", dark: "#CC3A00" },
+        ink: "#F4F4F0",
+        graphite: "#B8B4AD",
+        muted: "#817D76",
+        confirm: "#63D391",
       },
       fontFamily: {
-        display: ["Newsreader", "Georgia", "serif"],
+        display: ["Sora", "sans-serif"],
         sans: ["Manrope", "sans-serif"],
       },
       boxShadow: { paper: "0 18px 50px rgba(29,29,27,.08)" },

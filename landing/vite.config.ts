@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   root: "landing",
-  base: "/dm-propria/",
+  base: "./",
   plugins: [react()],
   build: {
     outDir: "../public/dm-propria",
