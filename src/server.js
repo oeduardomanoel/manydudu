@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { createApp } from "./app.js";
 import { MetaClient } from "./meta/client.js";
-import { JsonStore } from "./storage/json-store.js";
+import { createStore } from "./storage/create-store.js";
 
 const env = process.env;
 const port = Number(env.PORT || 3000);
-const store = new JsonStore(join(process.cwd(), "data", "db.json"));
+const store = createStore({ env });
 await store.initialize();
 const meta = new MetaClient({ accessToken: env.META_ACCESS_TOKEN, instagramAccountId: env.INSTAGRAM_ACCOUNT_ID,
   graphVersion: env.META_GRAPH_VERSION || "v23.0", minWriteIntervalMs: Number(env.META_MIN_WRITE_INTERVAL_MS || 1500) });

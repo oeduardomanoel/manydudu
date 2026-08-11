@@ -62,4 +62,26 @@ O cliente detecta automaticamente o fluxo pelo tipo do token. O Graph API Explor
 - `public`: painel administrativo
 - `test`: testes nativos do Node
 
+## Persistir automações no Supabase
+
+O servidor usa Supabase quando as credenciais abaixo estão configuradas. Sem elas, continua usando `data/db.json`, mantendo a instalação local simples para as aulas.
+
+1. Crie um projeto no Supabase.
+2. Abra o SQL Editor e execute `supabase/migrations/001_manydudu_state.sql`.
+3. Em Project Settings > API Keys, copie a URL do projeto e uma **Secret key** de servidor.
+4. No EasyPanel, adicione:
+
+```env
+SUPABASE_URL=https://SEU-PROJETO.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_COLOQUE_AQUI
+SUPABASE_STATE_ID=default
+DATA_PATH=/app/data/db.json
+```
+
+5. Faça um novo deploy.
+
+No primeiro início, se a tabela estiver vazia e `/app/data/db.json` existir, o ManyDudu importa automaticamente as automações, contatos e atividades atuais. Depois disso, o Supabase passa a ser a fonte principal e novos deploys não apagam os dados.
+
+`SUPABASE_SECRET_KEY` é uma credencial administrativa. Guarde-a somente nas variáveis de ambiente do EasyPanel. Nunca coloque essa chave no frontend, no GitHub ou em mensagens. Projetos antigos também podem usar `SUPABASE_SERVICE_ROLE_KEY` como alternativa compatível.
+
 Para produção com múltiplas instâncias, migre `JsonStore` para PostgreSQL, adicione login ao painel, fila de jobs/retries e criptografia/rotação de credenciais.
