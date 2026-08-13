@@ -20,10 +20,24 @@ export class AgentRouterClient {
       body: JSON.stringify({ model: this.model, temperature: 0.45, max_tokens: 500,
         response_format: { type: "json_object" }, messages: [{ role: "system", content: buildSystemPrompt(session) }, ...safeHistory(history)] })
     });
-    if (!response.ok) throw new Error(`AgentRouter indisponível (HTTP ${response.status}).`);
+    if (!response.ok) {
+      const detail = await safeProviderError(response, this.apiKey);
+      throw new Error(`AgentRouter indisponível (HTTP ${response.status})${detail ? `: ${detail}` : "."}`);
+    }
     const payload = await response.json();
     return parseResult(payload?.choices?.[0]?.message?.content);
   }
+}
+
+async function safeProviderError(response, apiKey) {
+  const contentType = String(response.headers.get("content-type") ?? "").toLowerCase();
+  if (!contentType.includes("json")) return "Resposta não JSON do provedor.";
+  try {
+    const payload = await response.json();
+    const raw = String(payload?.error?.message ?? payload?.message ?? payload?.error ?? "").trim();
+    if (!raw) return "";
+    return raw.replaceAll(String(apiKey), "[redacted]").replace(/[\r\n\t]+/g, " ").slice(0, 300);
+  } catch { return "Resposta de erro inválida do provedor."; }
 }
 
 function buildSystemPrompt(session) {

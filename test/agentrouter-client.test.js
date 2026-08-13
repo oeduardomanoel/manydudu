@@ -21,6 +21,18 @@ test("sends a bounded conversation and parses structured qualification", async (
   assert.deepEqual(result.messages, ["Entendi.", "Qual o volume semanal?"]);
 });
 
+test("exposes a bounded provider error without leaking request credentials", async () => {
+  const client = new AgentRouterClient({ apiKey: "never-log-this-key", baseUrl: "https://router.example/v1", model: "wrong-model",
+    fetchImpl: async () => new Response(JSON.stringify({ error: { message: "Unsupported parameter: response_format" } }),
+      { status: 400, headers: { "content-type": "application/json" } }) });
+
+  await assert.rejects(() => client.respond({ session: {}, history: [] }), (error) => {
+    assert.match(error.message, /Unsupported parameter: response_format/);
+    assert.doesNotMatch(error.message, /never-log-this-key/);
+    return true;
+  });
+});
+
 test("rejects insecure endpoints and malformed model output", async () => {
   assert.throws(() => new AgentRouterClient({ apiKey: "x", baseUrl: "http://router.example", model: "m" }), /HTTPS/);
   const client = new AgentRouterClient({ apiKey: "x", baseUrl: "https://router.example/v1", model: "m",
