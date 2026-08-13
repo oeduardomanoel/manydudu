@@ -77,25 +77,6 @@ test("pauses and resumes automations for one contact", async (t) => {
   assert.equal(await store.isContactPaused("ig-9"), false);
 });
 
-test("persists an AI session and exposes qualification in the CRM contact", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "manydudu-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const path = join(directory, "db.json");
-  const store = new JsonStore(path);
-  await store.initialize();
-  await store.recordContactEvent({ contactId: "ig-ai", username: "maria", type: "comment", text: "sistema", at: "2026-08-01T12:00:00.000Z" });
-
-  await store.startAiSession("ig-ai", { ruleId: "rule-ai", status: "active", turnCount: 0, history: [] });
-  await store.updateAiSession("ig-ai", { turnCount: 1, qualification: { stage: "interested", score: 72, summary: "Quer reduzir trabalho manual." } });
-
-  const reloaded = new JsonStore(path);
-  await reloaded.initialize();
-  assert.equal((await reloaded.getAiSession("ig-ai")).turnCount, 1);
-  const contact = await reloaded.getContact("ig-ai");
-  assert.equal(contact.aiSession.ruleId, "rule-ai");
-  assert.deepEqual(contact.qualification, { stage: "interested", score: 72, summary: "Quer reduzir trabalho manual." });
-});
-
 test("replaces an existing rule and reports a missing id", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "manydudu-"));
   t.after(() => rm(directory, { recursive: true, force: true }));

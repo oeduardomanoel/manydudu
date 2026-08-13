@@ -52,14 +52,6 @@ export function createRule(input) {
   const profileUrl = String(input.profileUrl ?? "").trim();
   const followButtonTitle = String(input.followButtonTitle ?? "").trim();
   const confirmFollowTitle = String(input.confirmFollowTitle ?? "").trim();
-  const aiEnabled = input.aiEnabled === true || input.aiEnabled === "on";
-  const aiGoal = String(input.aiGoal ?? "").trim();
-  const aiInstructions = String(input.aiInstructions ?? "").trim();
-  if (aiEnabled && !["private", "both"].includes(input.responseMode)) throw new Error("A qualificação por IA exige mensagem privada.");
-  if (aiEnabled && !input.mediaId) throw new Error("A qualificação por IA exige um Reel específico.");
-  if (aiEnabled && (!aiGoal || aiGoal.length > 800)) throw new Error("Defina um objetivo da IA com até 800 caracteres.");
-  if (aiInstructions.length > 2000) throw new Error("As instruções da IA podem ter no máximo 2000 caracteres.");
-  if (aiEnabled && followUpEnabled) throw new Error("Escolha apenas um: qualificação por IA ou entrega automática de link.");
   if (followUpEnabled && !["private", "both"].includes(input.responseMode)) throw new Error("A entrega após resposta exige mensagem privada.");
   if (followUpEnabled && (!followUpText || !followUpUrl)) throw new Error("Texto e link da entrega são obrigatórios.");
   if (followUpEnabled && !isSecureUrl(followUpUrl)) throw new Error("O link de entrega precisa usar HTTPS.");
@@ -79,7 +71,6 @@ export function createRule(input) {
     mediaTitle: input.mediaTitle ? String(input.mediaTitle).slice(0, 120) : null,
     followUpEnabled, followUpText, followUpUrl, requireFollow, followPrompt, deliveryStyle, buttonTitle,
     initialQuickReplyEnabled, initialQuickReplyTitle, profileUrl, followButtonTitle, confirmFollowTitle, journey,
-    aiEnabled, aiGoal, aiInstructions,
     createdAt: new Date().toISOString() };
 }
 

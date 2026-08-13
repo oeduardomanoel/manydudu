@@ -10,7 +10,7 @@ async function readBody(request, limit = 1_000_000) {
   return Buffer.concat(chunks);
 }
 
-export function createApp({ store, meta, config, serveStatic, aiAgent = null }) {
+export function createApp({ store, meta, config, serveStatic }) {
   return async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     try {
@@ -25,7 +25,7 @@ export function createApp({ store, meta, config, serveStatic, aiAgent = null }) 
         const comments = extractComments(payload);
         const messages = [...extractMessages(payload), ...extractPostbacks(payload)];
         response.writeHead(200); response.end("EVENT_RECEIVED");
-        void Promise.all([processComments(comments, store, meta), processMessages(messages, store, meta, aiAgent)]);
+        void Promise.all([processComments(comments, store, meta), processMessages(messages, store, meta)]);
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/state") {
@@ -128,11 +128,6 @@ export async function processComments(comments, store, meta) {
     try {
       let privateResult = null;
       if (["private", "both"].includes(rule.responseMode)) privateResult = await meta.reply(comment.id, rule.reply, "private");
-      if (rule.aiEnabled && privateResult?.recipient_id) await store.startAiSession(String(privateResult.recipient_id), {
-        ruleId: rule.id, ruleName: rule.name, mediaId: comment.mediaId, keyword: rule.keyword,
-        goal: rule.aiGoal, instructions: rule.aiInstructions, status: "active", turnCount: 0, history: [],
-        sourceCommentId: comment.id, startedAt: new Date().toISOString(), updatedAt: new Date().toISOString()
-      });
       if (rule.followUpEnabled && privateResult?.recipient_id) await store.setPendingDelivery(String(privateResult.recipient_id), {
         ruleId: rule.id, ruleName: rule.name, text: rule.followUpText, url: rule.followUpUrl,
         requireFollow: rule.requireFollow, followPrompt: rule.followPrompt,
@@ -156,17 +151,12 @@ export async function processComments(comments, store, meta) {
   }
 }
 
-export async function processMessages(messages, store, meta, aiAgent = null) {
+async function processMessages(messages, store, meta) {
   for (const message of messages) {
     if (!(await store.claimEvent(message.id))) continue;
     await store.recordContactEvent({ contactId: message.senderId, username: "instagram", type: message.payload ? "postback" : "message",
       text: message.text, at: new Date(message.timestamp).toISOString() });
     if (await store.isContactPaused(message.senderId)) continue;
-    const aiSession = await store.getAiSession?.(message.senderId);
-    if (aiSession?.status === "active") {
-      await processAiMessage(message, aiSession, store, meta, aiAgent);
-      continue;
-    }
     const delivery = await store.getPendingDelivery(message.senderId);
     if (!delivery) continue;
     try {
@@ -191,50 +181,4 @@ export async function processMessages(messages, store, meta, aiAgent = null) {
         rule: delivery.ruleName, error: error.message, at: new Date().toISOString() });
     }
   }
-}
-
-async function processAiMessage(message, session, store, meta, aiAgent) {
-  if (!aiAgent) {
-    await store.log({ id: message.id, status: "ai_unavailable", ruleId: session.ruleId, mediaId: session.mediaId,
-      text: "IA não configurada; mensagem mantida no CRM", at: new Date().toISOString() });
-    return;
-  }
-  if (session.turnCount >= 20 || isExpired(session.updatedAt)) {
-    await store.updateAiSession(message.senderId, { status: "expired" });
-    return;
-  }
-  try {
-    const history = [...(session.history ?? []), { role: "user", content: String(message.text ?? "").slice(0, 2000) }].slice(-12);
-    const result = await aiAgent.respond({ session, message: { type: "text", text: message.text }, history });
-    const replies = sanitizeAiMessages(result?.messages);
-    for (const reply of replies) await meta.sendDirect(message.senderId, reply);
-    const assistantHistory = replies.map((content) => ({ role: "assistant", content }));
-    await store.updateAiSession(message.senderId, { turnCount: session.turnCount + 1,
-      history: [...history, ...assistantHistory].slice(-12), qualification: sanitizeQualification(result?.qualification),
-      status: result?.handoff === true ? "handoff" : "active" });
-    await store.log({ id: message.id, status: result?.handoff === true ? "ai_handoff" : "ai_replied", ruleId: session.ruleId,
-      mediaId: session.mediaId, text: `IA respondeu em ${replies.length} mensagem(ns)`, at: new Date().toISOString() });
-  } catch (error) {
-    await store.log({ id: message.id, status: "ai_failed", ruleId: session.ruleId, mediaId: session.mediaId,
-      text: "Falha segura na resposta da IA", error: String(error.message).slice(0, 300), at: new Date().toISOString() });
-  }
-}
-
-function sanitizeAiMessages(messages) {
-  const safe = (Array.isArray(messages) ? messages : []).map((item) => String(item ?? "").trim())
-    .filter(Boolean).slice(0, 3).map((item) => item.slice(0, 1000));
-  if (!safe.length) throw new Error("A IA não retornou uma resposta válida.");
-  return safe;
-}
-
-function sanitizeQualification(value) {
-  const stages = ["discovering", "curious", "interested", "qualified", "not_fit"];
-  const stage = stages.includes(value?.stage) ? value.stage : "discovering";
-  return { stage, score: Math.max(0, Math.min(100, Number(value?.score) || 0)),
-    summary: String(value?.summary ?? "").slice(0, 500) };
-}
-
-function isExpired(updatedAt) {
-  const timestamp = Date.parse(updatedAt);
-  return !Number.isFinite(timestamp) || Date.now() - timestamp > 24 * 60 * 60 * 1000;
 }

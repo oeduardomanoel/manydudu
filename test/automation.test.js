@@ -115,27 +115,3 @@ test("rejects combined mode without a public reply and more than ten alternative
   assert.throws(() => createRule({ keyword: "quero", reply: "DM", match: "contains", responseMode: "both",
     publicReplies: Array.from({ length: 11 }, (_, index) => `Resposta ${index + 1}`) }), /10/);
 });
-
-test("creates an AI qualification rule scoped to one Reel", () => {
-  const rule = createRule({ keyword: "sistema", reply: "Vi seu comentário. Posso te fazer uma pergunta?", match: "exact",
-    responseMode: "private", mediaId: "reel-42", aiEnabled: true,
-    aiGoal: "Entender o processo manual e qualificar interesse em implementação",
-    aiInstructions: "Faça uma pergunta por vez e não invente informações." });
-
-  assert.equal(rule.aiEnabled, true);
-  assert.equal(rule.mediaId, "reel-42");
-  assert.match(rule.aiGoal, /qualificar/);
-});
-
-test("rejects AI qualification without a private message or a scoped Reel", () => {
-  assert.throws(() => createRule({ keyword: "sistema", reply: "Oi", match: "exact", responseMode: "public",
-    mediaId: "reel-42", aiEnabled: true, aiGoal: "Qualificar" }), /mensagem privada/i);
-  assert.throws(() => createRule({ keyword: "sistema", reply: "Oi", match: "exact", responseMode: "private",
-    aiEnabled: true, aiGoal: "Qualificar" }), /Reel específico/i);
-});
-
-test("does not mix AI qualification with automatic link delivery", () => {
-  assert.throws(() => createRule({ keyword: "sistema", reply: "Oi", match: "exact", responseMode: "private",
-    mediaId: "reel-42", aiEnabled: true, aiGoal: "Qualificar", followUpEnabled: true,
-    followUpText: "Material", followUpUrl: "https://example.com" }), /escolha apenas um/i);
-});

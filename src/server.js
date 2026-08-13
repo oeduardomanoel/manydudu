@@ -4,7 +4,6 @@ import { extname, join, normalize } from "node:path";
 import { createApp } from "./app.js";
 import { MetaClient } from "./meta/client.js";
 import { createStore } from "./storage/create-store.js";
-import { AgentRouterClient } from "./ai/agentrouter-client.js";
 
 const env = process.env;
 const port = Number(env.PORT || 3000);
@@ -14,9 +13,6 @@ const meta = new MetaClient({ accessToken: env.META_ACCESS_TOKEN, instagramAccou
   graphVersion: env.META_GRAPH_VERSION || "v23.0", minWriteIntervalMs: Number(env.META_MIN_WRITE_INTERVAL_MS || 1500) });
 const config = { verifyToken: env.META_VERIFY_TOKEN || "", appSecret: env.META_APP_SECRET || "",
   configured: Boolean(env.META_ACCESS_TOKEN && env.INSTAGRAM_ACCOUNT_ID && env.META_VERIFY_TOKEN && env.META_APP_SECRET) };
-const aiAgent = env.AGENTROUTER_API_KEY && env.AGENTROUTER_BASE_URL && env.AGENTROUTER_MODEL
-  ? new AgentRouterClient({ apiKey: env.AGENTROUTER_API_KEY, baseUrl: env.AGENTROUTER_BASE_URL,
-    model: env.AGENTROUTER_MODEL, timeoutMs: Number(env.AGENTROUTER_TIMEOUT_MS || 20_000) }) : null;
 
 const publicRoot = join(process.cwd(), "public");
 const mime = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
@@ -31,4 +27,4 @@ async function serveStatic(_request, response, pathname) {
   catch { response.writeHead(404); response.end("Not found"); }
 }
 
-createServer(createApp({ store, meta, config, serveStatic, aiAgent })).listen(port, () => console.log(`ManyDudu em http://localhost:${port}`));
+createServer(createApp({ store, meta, config, serveStatic })).listen(port, () => console.log(`ManyDudu em http://localhost:${port}`));
