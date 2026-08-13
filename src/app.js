@@ -1,7 +1,6 @@
 import { createRule, findMatchingRule, selectPublicReply, updateRule } from "./domain/automation.js";
 import { buildAnalytics } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature } from "./meta/webhook.js";
-import { createHash, timingSafeEqual } from "node:crypto";
 
 const json = (response, status, body) => { response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" }); response.end(JSON.stringify(body)); };
 
@@ -28,9 +27,6 @@ export function createApp({ store, meta, config, serveStatic, aiAgent = null }) 
         response.writeHead(200); response.end("EVENT_RECEIVED");
         void Promise.all([processComments(comments, store, meta), processMessages(messages, store, meta, aiAgent)]);
         return;
-      }
-      if (url.pathname.startsWith("/api/") && !isAdminAuthorized(request, config.adminToken)) {
-        return json(response, 401, { error: "Acesso administrativo necessário." });
       }
       if (request.method === "GET" && url.pathname === "/api/state") {
         const state = await store.read(); return json(response, 200, { rules: state.rules, activity: state.activity, configured: config.configured });
@@ -114,14 +110,6 @@ export function createApp({ store, meta, config, serveStatic, aiAgent = null }) 
       return serveStatic(request, response, url.pathname);
     } catch (error) { console.error(error.message); return json(response, 400, { error: error.message }); }
   };
-}
-
-export function isAdminAuthorized(request, expectedToken) {
-  if (!expectedToken) return true;
-  const provided = String(request.headers?.authorization ?? "").replace(/^Bearer\s+/i, "");
-  const expectedHash = createHash("sha256").update(String(expectedToken)).digest();
-  const providedHash = createHash("sha256").update(provided).digest();
-  return timingSafeEqual(expectedHash, providedHash);
 }
 
 export async function processComments(comments, store, meta) {

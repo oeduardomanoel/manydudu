@@ -4,15 +4,7 @@ const truncate = (value = "", length = 80) => value.length > length ? `${value.s
 const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [] };
 
 async function request(path, options) {
-  let adminToken = sessionStorage.getItem("manydudu_admin_token") || "";
-  const send = () => fetch(path, { ...options, headers: { "Content-Type": "application/json",
-    ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}), ...(options?.headers || {}) } });
-  let response = await send();
-  if (response.status === 401) {
-    adminToken = prompt("Digite a chave de acesso do painel ManyDudu:") || "";
-    if (adminToken) sessionStorage.setItem("manydudu_admin_token", adminToken);
-    response = await send();
-  }
+  const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...(options?.headers || {}) } });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Não foi possível concluir a solicitação.");
   return data;

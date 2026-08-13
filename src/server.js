@@ -12,7 +12,7 @@ const store = createStore({ env });
 await store.initialize();
 const meta = new MetaClient({ accessToken: env.META_ACCESS_TOKEN, instagramAccountId: env.INSTAGRAM_ACCOUNT_ID,
   graphVersion: env.META_GRAPH_VERSION || "v23.0", minWriteIntervalMs: Number(env.META_MIN_WRITE_INTERVAL_MS || 1500) });
-const config = { verifyToken: env.META_VERIFY_TOKEN || "", appSecret: env.META_APP_SECRET || "", adminToken: env.ADMIN_API_TOKEN || "",
+const config = { verifyToken: env.META_VERIFY_TOKEN || "", appSecret: env.META_APP_SECRET || "",
   configured: Boolean(env.META_ACCESS_TOKEN && env.INSTAGRAM_ACCOUNT_ID && env.META_VERIFY_TOKEN && env.META_APP_SECRET) };
 const aiAgent = env.AGENTROUTER_API_KEY && env.AGENTROUTER_BASE_URL && env.AGENTROUTER_MODEL
   ? new AgentRouterClient({ apiKey: env.AGENTROUTER_API_KEY, baseUrl: env.AGENTROUTER_BASE_URL,
