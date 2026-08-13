@@ -4,7 +4,15 @@ const truncate = (value = "", length = 80) => value.length > length ? `${value.s
 const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [] };
 
 async function request(path, options) {
-  const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  let adminToken = sessionStorage.getItem("manydudu_admin_token") || "";
+  const send = () => fetch(path, { ...options, headers: { "Content-Type": "application/json",
+    ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}), ...(options?.headers || {}) } });
+  let response = await send();
+  if (response.status === 401) {
+    adminToken = prompt("Digite a chave de acesso do painel ManyDudu:") || "";
+    if (adminToken) sessionStorage.setItem("manydudu_admin_token", adminToken);
+    response = await send();
+  }
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Não foi possível concluir a solicitação.");
   return data;
@@ -27,7 +35,7 @@ async function renderDashboard() {
 
 function renderRules(rules) {
   $("#rules").innerHTML = rules.length ? rules.map((rule) => `<article class="rule">
-    <div class="rule-icon">${rule.followUpEnabled ? "⚡" : rule.mediaId ? "▣" : "↳"}</div><div><h3>${escapeHtml(rule.name)}${rule.followUpEnabled ? `<span class="delivery-badge">${rule.requireFollow ? "FOLLOW + LINK" : "LINK APÓS RESPOSTA"}</span>` : ""}</h3>
+    <div class="rule-icon">${rule.aiEnabled ? "AI" : rule.followUpEnabled ? "⚡" : rule.mediaId ? "▣" : "↳"}</div><div><h3>${escapeHtml(rule.name)}${rule.aiEnabled ? '<span class="delivery-badge">AGENTE IA</span>' : rule.followUpEnabled ? `<span class="delivery-badge">${rule.requireFollow ? "FOLLOW + LINK" : "LINK APÓS RESPOSTA"}</span>` : ""}</h3>
     <p>“${escapeHtml(rule.keyword)}” · ${rule.responseMode === "both" ? "pública + privada" : rule.responseMode === "private" ? "mensagem privada" : "resposta pública"}</p>
     <p>${rule.mediaId ? `Somente: ${escapeHtml(truncate(rule.mediaTitle || "Reel selecionado", 52))}` : "Todos os conteúdos"}</p><div class="journey-mini">${(rule.journey || []).map((step) => `<span title="${escapeHtml(step.summary)}">${escapeHtml(step.title)}</span>`).join("")}</div></div>
     <div class="rule-actions"><button class="edit-rule" data-edit="${rule.id}">Editar</button><button class="icon-btn ${rule.enabled ? "" : "off"}" data-toggle="${rule.id}" title="Ativar/desativar">●</button><button class="icon-btn" data-delete="${rule.id}" title="Excluir">×</button></div>
@@ -92,7 +100,8 @@ async function openContact(contactId) {
   state.selectedContactId = contactId;
   renderContacts($("#contact-search").value);
   const history = (contact.history || []).map((event) => `<article class="history-event ${event.type}"><span>${event.type === "comment" ? "COMENTÁRIO" : event.type === "postback" ? "BOTÃO" : event.type === "outgoing" ? "VOCÊ" : "DIRECT"}</span><p>${escapeHtml(event.text)}</p><time>${new Date(event.at).toLocaleString("pt-BR")}</time></article>`).join("");
-  $("#contact-detail").innerHTML = `<div class="contact-title"><div><p class="eyebrow">CAIXA DE ENTRADA</p><h3>@${escapeHtml(contact.username || "instagram")}</h3></div><div class="contact-states"><span class="follow-state ${contact.follower ? "yes" : ""}">${contact.follower ? "✓ segue o perfil" : "status não verificado"}</span><button id="pause-contact" class="pause-button ${contact.automationPaused ? "paused" : ""}">${contact.automationPaused ? "▶ Retomar automação" : "Ⅱ Pausar automação"}</button></div></div><div class="tags">${(contact.tags || []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") || '<small>Sem tags</small>'}</div><div class="history-list">${history || '<p class="empty">Sem histórico.</p>'}</div><form id="reply-form" class="reply-form"><textarea name="text" maxlength="1000" required placeholder="Escreva uma resposta manual..."></textarea><button class="primary compact" type="submit">Enviar Direct</button><small>Ao enviar, a automação desta pessoa será pausada.</small></form><form id="contact-form"><label>Tags separadas por vírgula<input name="tags" value="${escapeHtml((contact.tags || []).join(", "))}" placeholder="lead, material"></label><label>Nova nota<textarea name="note" placeholder="Ex.: pediu o guia de IA"></textarea></label><button class="primary compact" type="submit">Salvar contato</button></form>`;
+  const qualification = contact.qualification ? `<div class="qualification-card"><span>QUALIFICAÇÃO IA</span><strong>${escapeHtml(contact.qualification.stage)} · ${Number(contact.qualification.score) || 0}/100</strong><p>${escapeHtml(contact.qualification.summary || "Em diagnóstico")}</p></div>` : "";
+  $("#contact-detail").innerHTML = `<div class="contact-title"><div><p class="eyebrow">CAIXA DE ENTRADA</p><h3>@${escapeHtml(contact.username || "instagram")}</h3></div><div class="contact-states"><span class="follow-state ${contact.follower ? "yes" : ""}">${contact.follower ? "✓ segue o perfil" : "status não verificado"}</span><button id="pause-contact" class="pause-button ${contact.automationPaused ? "paused" : ""}">${contact.automationPaused ? "▶ Retomar automação" : "Ⅱ Pausar automação"}</button></div></div>${qualification}<div class="tags">${(contact.tags || []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") || '<small>Sem tags</small>'}</div><div class="history-list">${history || '<p class="empty">Sem histórico.</p>'}</div><form id="reply-form" class="reply-form"><textarea name="text" maxlength="1000" required placeholder="Escreva uma resposta manual..."></textarea><button class="primary compact" type="submit">Enviar Direct</button><small>Ao enviar, a automação desta pessoa será pausada.</small></form><form id="contact-form"><label>Tags separadas por vírgula<input name="tags" value="${escapeHtml((contact.tags || []).join(", "))}" placeholder="lead, material"></label><label>Nova nota<textarea name="note" placeholder="Ex.: pediu o guia de IA"></textarea></label><button class="primary compact" type="submit">Salvar contato</button></form>`;
   $("#pause-contact").addEventListener("click", async () => {
     await request(`/api/contacts/${contactId}/pause`, { method: "POST", body: JSON.stringify({ paused: !contact.automationPaused }) });
     await loadContacts(); await openContact(contactId);
@@ -146,11 +155,12 @@ function openRuleDialog(media = null, rule = null) {
   $("#rule-scope strong").textContent = scopedMedia ? truncate(scopedMedia.caption || "Reel selecionado", 70) : "Todos os conteúdos";
   $("#rule-scope .scope-icon").textContent = scopedMedia ? "▣" : "◎";
   $("#clear-scope").hidden = !scopedMedia;
-  for (const name of ["name", "keyword", "match", "reply", "responseMode", "followUpText", "followUpUrl", "followPrompt", "profileUrl", "followButtonTitle", "confirmFollowTitle", "deliveryStyle", "buttonTitle"]) {
+  for (const name of ["name", "keyword", "match", "reply", "responseMode", "followUpText", "followUpUrl", "followPrompt", "profileUrl", "followButtonTitle", "confirmFollowTitle", "deliveryStyle", "buttonTitle", "aiGoal", "aiInstructions"]) {
     if (rule && form.elements[name]) form.elements[name].value = rule[name] ?? "";
   }
   form.elements.publicReplies.value = Array.isArray(rule?.publicReplies) ? rule.publicReplies.join("\n") : "";
   form.elements.followUpEnabled.checked = Boolean(rule?.followUpEnabled);
+  form.elements.aiEnabled.checked = Boolean(rule?.aiEnabled);
   form.elements.requireFollow.checked = Boolean(rule?.requireFollow);
   if (!rule) {
     form.elements.deliveryStyle.value = "button";
@@ -160,6 +170,7 @@ function openRuleDialog(media = null, rule = null) {
   const requiresFollow = form.elements.requireFollow.checked;
   const usesButton = form.elements.deliveryStyle.value === "button";
   $("#delivery-fields").hidden = !hasDelivery;
+  $("#ai-fields").hidden = !form.elements.aiEnabled.checked;
   $("#follow-prompt-fields").hidden = !requiresFollow;
   $("#button-fields").hidden = !usesButton;
   form.elements.followUpText.required = hasDelivery;
@@ -169,6 +180,7 @@ function openRuleDialog(media = null, rule = null) {
   form.elements.followButtonTitle.required = requiresFollow;
   form.elements.confirmFollowTitle.required = requiresFollow;
   form.elements.buttonTitle.required = usesButton;
+  form.elements.aiGoal.required = form.elements.aiEnabled.checked;
   $("#rule-dialog-mode").textContent = rule ? "EDITAR AUTOMAÇÃO" : "NOVA AUTOMAÇÃO";
   $("#rule-dialog-title").textContent = rule ? "Ajuste seu fluxo" : "Quando alguém comentar...";
   $("#save-rule").textContent = rule ? "Salvar alterações →" : "Criar automação →";
@@ -186,9 +198,11 @@ function renderJourneyPreview() {
   const keyword = form.elements.keyword.value.trim() || "palavra-chave";
   const responseMode = form.elements.responseMode.value;
   const delivery = form.elements.followUpEnabled.checked;
+  const aiEnabled = form.elements.aiEnabled.checked;
   const steps = [["trigger", "Comentário", `Contém “${keyword}”`]];
   if (["public", "both"].includes(responseMode)) steps.push(["message", "Resposta pública", "Responder comentário"]);
   if (["private", "both"].includes(responseMode)) steps.push(["message", "Mensagem privada", "Enviar primeira DM"]);
+  if (aiEnabled) steps.push(["reply", "Agente IA", "Diagnosticar e qualificar"]);
   if (delivery) steps.push(["reply", "Confirmação", "Aguardar resposta no Direct"]);
   if (delivery && form.elements.requireFollow.checked) steps.push(["condition", "Segue o perfil?", "Verificar antes de entregar"]);
   if (delivery) steps.push(["delivery", "Entrega", form.elements.deliveryStyle.value === "button" ? "Botão com link" : "Link no texto"]);
@@ -204,12 +218,15 @@ function syncResponseModeFields() {
   form.elements.publicReplies.required = combined;
   $("#primary-reply-label").textContent = publicOnly ? "Resposta pública" : "Mensagem privada inicial";
   form.elements.followUpEnabled.disabled = publicOnly;
+  form.elements.aiEnabled.disabled = publicOnly || !form.elements.mediaId.value;
   form.elements.followUpEnabled.closest(".delivery-toggle").classList.toggle("is-disabled", publicOnly);
   if (publicOnly) {
     form.elements.followUpEnabled.checked = false;
     form.elements.requireFollow.checked = false;
+    form.elements.aiEnabled.checked = false;
     $("#delivery-fields").hidden = true;
     $("#follow-prompt-fields").hidden = true;
+    $("#ai-fields").hidden = true;
   }
 }
 
@@ -229,15 +246,32 @@ $("#clear-scope").addEventListener("click", () => {
   $("#rule-scope strong").textContent = "Todos os conteúdos";
   $("#rule-scope .scope-icon").textContent = "◎";
   $("#clear-scope").hidden = true;
+  $("#rule-form").elements.aiEnabled.checked = false;
+  $("#ai-fields").hidden = true;
+  syncResponseModeFields();
 });
 $("#rule-form").elements.followUpEnabled.addEventListener("change", (event) => {
   $("#delivery-fields").hidden = !event.target.checked;
   $("#rule-form").elements.followUpText.required = event.target.checked;
   $("#rule-form").elements.followUpUrl.required = event.target.checked;
+  if (event.target.checked) {
+    $("#rule-form").elements.aiEnabled.checked = false;
+    $("#ai-fields").hidden = true;
+    $("#rule-form").elements.aiGoal.required = false;
+  }
   if (!event.target.checked) {
     $("#rule-form").elements.requireFollow.checked = false;
     $("#follow-prompt-fields").hidden = true;
     $("#rule-form").elements.followPrompt.required = false;
+  }
+});
+$("#rule-form").elements.aiEnabled.addEventListener("change", (event) => {
+  const enabled = event.target.checked;
+  $("#ai-fields").hidden = !enabled;
+  $("#rule-form").elements.aiGoal.required = enabled;
+  if (enabled) {
+    $("#rule-form").elements.followUpEnabled.checked = false;
+    $("#delivery-fields").hidden = true;
   }
 });
 $("#rule-form").elements.requireFollow.addEventListener("change", (event) => {
@@ -289,6 +323,7 @@ $("#rule-form").addEventListener("submit", async (event) => {
   const payload = Object.fromEntries(form);
   payload.publicReplies = String(form.get("publicReplies") || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   payload.followUpEnabled = ruleForm.elements.followUpEnabled.checked;
+  payload.aiEnabled = ruleForm.elements.aiEnabled.checked;
   payload.requireFollow = ruleForm.elements.requireFollow.checked;
   const ruleId = ruleForm.dataset.ruleId;
   const path = ruleId ? `/api/rules/${ruleId}` : "/api/rules";

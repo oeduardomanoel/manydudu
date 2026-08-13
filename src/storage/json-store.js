@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {} };
+const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, aiSessions: {} };
 
 export class JsonStore {
   constructor(path) { this.path = path; this.queue = Promise.resolve(); }
@@ -83,6 +83,30 @@ export class JsonStore {
   async isContactPaused(id) {
     const contact = await this.getContact(id);
     return Boolean(contact?.automationPaused);
+  }
+  async startAiSession(contactId, session) {
+    await this.update((state) => {
+      state.aiSessions ??= {}; state.aiSessions[contactId] = session;
+      if (state.contacts?.[contactId]) state.contacts[contactId].aiSession = { ruleId: session.ruleId, status: session.status, mediaId: session.mediaId };
+    });
+  }
+  async getAiSession(contactId) {
+    const state = await this.read();
+    return state.aiSessions?.[contactId] ?? null;
+  }
+  async updateAiSession(contactId, changes) {
+    let updated = null;
+    await this.update((state) => {
+      state.aiSessions ??= {};
+      if (!state.aiSessions[contactId]) return;
+      updated = { ...state.aiSessions[contactId], ...changes, updatedAt: new Date().toISOString() };
+      state.aiSessions[contactId] = updated;
+      if (state.contacts?.[contactId]) {
+        state.contacts[contactId].aiSession = { ruleId: updated.ruleId, status: updated.status, mediaId: updated.mediaId };
+        if (updated.qualification) state.contacts[contactId].qualification = updated.qualification;
+      }
+    });
+    return updated;
   }
   async #write(state) { const temporary = `${this.path}.tmp`; await writeFile(temporary, JSON.stringify(state, null, 2)); await rename(temporary, this.path); }
 }
