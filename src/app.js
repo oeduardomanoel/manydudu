@@ -235,7 +235,13 @@ export async function processComments(comments, store, meta) {
 async function processMessages(messages, store, meta) {
   for (const message of messages) {
     if (!(await store.claimEvent(message.id))) continue;
-    await store.recordContactEvent({ contactId: message.senderId, username: "instagram", type: message.payload ? "postback" : "message",
+    const existing = await store.getContact(message.senderId);
+    let username = existing?.username && existing.username !== "instagram" ? existing.username : null;
+    if (!username) {
+      try { username = (await meta.getUserProfile(message.senderId)).username || null; }
+      catch { username = null; }
+    }
+    await store.recordContactEvent({ contactId: message.senderId, username: username || "instagram", type: message.payload ? "postback" : "message",
       text: message.text, at: new Date(message.timestamp).toISOString() });
     if (await store.isContactPaused(message.senderId)) continue;
     const delivery = await store.getPendingDelivery(message.senderId);

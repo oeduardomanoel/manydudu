@@ -3,6 +3,7 @@ import { createEditor, wireToolbar } from "/editor.js";
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const truncate = (value = "", length = 80) => value.length > length ? `${value.slice(0, length)}…` : value;
+const contactLabel = (contact) => contact.username && contact.username !== "instagram" ? `@${contact.username}` : `Contato sem @ · ${contact.id.slice(-6)}`;
 const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [] };
 const PIPELINE_STAGES = [["novo", "Novo"], ["contatado", "Contatado"], ["qualificado", "Qualificado"], ["cliente", "Cliente"], ["perdido", "Perdido"]];
 let pipelineOrigin = "all";
@@ -104,7 +105,7 @@ function renderContacts(query = "") {
   const normalized = query.trim().toLowerCase();
   const contacts = state.contacts.filter((contact) => !normalized || [contact.username, ...(contact.tags || []), contact.history?.[0]?.text]
     .some((value) => String(value || "").toLowerCase().includes(normalized)));
-  $("#contacts-list").innerHTML = contacts.length ? contacts.map((contact) => `<button class="contact-row ${contact.id === state.selectedContactId ? "active" : ""}" data-contact="${escapeHtml(contact.id)}"><span class="contact-avatar">${escapeHtml((contact.username || "IG").slice(0, 2).toUpperCase())}</span><span><strong>@${escapeHtml(contact.username || "instagram")}</strong><small>${escapeHtml(truncate(contact.history?.[0]?.text || "Interação registrada", 42))}</small></span><i>${contact.interactionCount}</i></button>`).join("") : '<p class="empty">Nenhum contato encontrado.</p>';
+  $("#contacts-list").innerHTML = contacts.length ? contacts.map((contact) => `<button class="contact-row ${contact.id === state.selectedContactId ? "active" : ""}" data-contact="${escapeHtml(contact.id)}"><span class="contact-avatar">${escapeHtml((contact.username && contact.username !== "instagram" ? contact.username : "IG").slice(0, 2).toUpperCase())}</span><span><strong>${escapeHtml(contactLabel(contact))}</strong><small>${escapeHtml(truncate(contact.history?.[0]?.text || "Interação registrada", 42))}</small></span><i>${contact.interactionCount}</i></button>`).join("") : '<p class="empty">Nenhum contato encontrado.</p>';
 }
 
 async function openContact(contactId) {
@@ -112,7 +113,7 @@ async function openContact(contactId) {
   state.selectedContactId = contactId;
   renderContacts($("#contact-search").value);
   const history = (contact.history || []).map((event) => `<article class="history-event ${event.type}"><span>${event.type === "comment" ? "COMENTÁRIO" : event.type === "postback" ? "BOTÃO" : event.type === "outgoing" ? "VOCÊ" : "DIRECT"}</span><p>${escapeHtml(event.text)}</p><time>${new Date(event.at).toLocaleString("pt-BR")}</time></article>`).join("");
-  $("#contact-detail").innerHTML = `<div class="contact-title"><div><p class="eyebrow">CAIXA DE ENTRADA</p><h3>@${escapeHtml(contact.username || "instagram")}</h3></div><div class="contact-states"><span class="follow-state ${contact.follower ? "yes" : ""}">${contact.follower ? "✓ segue o perfil" : "status não verificado"}</span><button id="pause-contact" class="pause-button ${contact.automationPaused ? "paused" : ""}">${contact.automationPaused ? "▶ Retomar automação" : "Ⅱ Pausar automação"}</button></div></div><div class="tags">${(contact.tags || []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") || '<small>Sem tags</small>'}</div><div class="history-list">${history || '<p class="empty">Sem histórico.</p>'}</div><form id="reply-form" class="reply-form"><textarea name="text" maxlength="1000" required placeholder="Escreva uma resposta manual..."></textarea><button class="primary compact" type="submit">Enviar Direct</button><small>Ao enviar, a automação desta pessoa será pausada.</small></form><form id="contact-form"><label>Tags separadas por vírgula<input name="tags" value="${escapeHtml((contact.tags || []).join(", "))}" placeholder="lead, material"></label><label>Nova nota<textarea name="note" placeholder="Ex.: pediu o guia de IA"></textarea></label><button class="primary compact" type="submit">Salvar contato</button></form>`;
+  $("#contact-detail").innerHTML = `<div class="contact-title"><div><p class="eyebrow">CAIXA DE ENTRADA</p><h3>${escapeHtml(contactLabel(contact))}</h3></div><div class="contact-states"><span class="follow-state ${contact.follower ? "yes" : ""}">${contact.follower ? "✓ segue o perfil" : "status não verificado"}</span><button id="pause-contact" class="pause-button ${contact.automationPaused ? "paused" : ""}">${contact.automationPaused ? "▶ Retomar automação" : "Ⅱ Pausar automação"}</button></div></div><div class="tags">${(contact.tags || []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") || '<small>Sem tags</small>'}</div><div class="history-list">${history || '<p class="empty">Sem histórico.</p>'}</div><form id="reply-form" class="reply-form"><textarea name="text" maxlength="1000" required placeholder="Escreva uma resposta manual..."></textarea><button class="primary compact" type="submit">Enviar Direct</button><small>Ao enviar, a automação desta pessoa será pausada.</small></form><form id="contact-form"><label>Tags separadas por vírgula<input name="tags" value="${escapeHtml((contact.tags || []).join(", "))}" placeholder="lead, material"></label><label>Nova nota<textarea name="note" placeholder="Ex.: pediu o guia de IA"></textarea></label><button class="primary compact" type="submit">Salvar contato</button></form>`;
   $("#pause-contact").addEventListener("click", async () => {
     await request(`/api/contacts/${contactId}/pause`, { method: "POST", body: JSON.stringify({ paused: !contact.automationPaused }) });
     await loadContacts(); await openContact(contactId);
@@ -182,7 +183,7 @@ function buildPipelineItems() {
     .filter((contact) => (contact.history || []).some((event) => event.type !== "comment"))
     .map((contact) => ({
       key: `contact:${contact.id}`, kind: "contact", id: contact.id,
-      label: `@${contact.username || "instagram"}`,
+      label: contactLabel(contact),
       origin: "Instagram", originKey: "instagram",
       detail: contact.history.find((event) => event.type !== "comment")?.text || "Sem histórico ainda",
       stage: contact.stage || "novo",
@@ -238,10 +239,11 @@ function renderPipeline() {
 function openPipelineDetail(key) {
   const item = pipelineItemsCache.find((entry) => entry.key === key);
   if (!item) return;
-  const whatsapp = item.kind === "lead" ? whatsappLink(item.raw.whatsapp) : `https://ig.me/m/${encodeURIComponent(item.raw.username || "")}`;
+  const whatsapp = item.kind === "lead" ? whatsappLink(item.raw.whatsapp)
+    : item.raw.username && item.raw.username !== "instagram" ? `https://ig.me/m/${encodeURIComponent(item.raw.username)}` : null;
   const fields = item.kind === "lead"
     ? [["WhatsApp", escapeHtml(item.raw.whatsapp)], ["E-mail", `<a href="mailto:${escapeHtml(item.raw.email)}">${escapeHtml(item.raw.email)}</a>`], ["Campanha", escapeHtml(item.origin)], ["Capturado em", new Date(item.raw.createdAt).toLocaleString("pt-BR")]]
-    : [["Instagram", `@${escapeHtml(item.raw.username || "instagram")}`], ["Segue o perfil", item.raw.follower ? "Sim" : "Não verificado"], ["Última interação", new Date(item.raw.lastInteractionAt).toLocaleString("pt-BR")]];
+    : [["Instagram", escapeHtml(contactLabel(item.raw))], ["Segue o perfil", item.raw.follower ? "Sim" : "Não verificado"], ["Última interação", new Date(item.raw.lastInteractionAt).toLocaleString("pt-BR")]];
   const niches = item.kind === "lead" ? (item.raw.niches || []).map((niche) => niche === "Outro" && item.raw.nicheOther ? item.raw.nicheOther : niche) : [];
   const history = item.kind === "contact" ? (item.raw.history || []).slice(0, 15) : [];
   $("#pipeline-detail").innerHTML = `
