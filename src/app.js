@@ -123,6 +123,8 @@ export function createApp({ store, meta, config, serveStatic }) {
           };
           if (supabaseUrl) { updates.SUPABASE_URL = supabaseUrl; updates.SUPABASE_SECRET_KEY = supabaseSecretKey; }
           await upsertEnvFile(config.envPath, updates);
+          config.adminUser = adminUser;
+          config.adminPassword = adminPassword;
           return json(response, 200, { ok: true, metaVerifyToken });
         }
         if (request.method === "POST" && url.pathname === "/api/setup/restart") {

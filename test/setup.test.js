@@ -105,6 +105,18 @@ test("POST /api/setup/complete rejects mismatched Supabase fields (one filled, o
   });
 });
 
+test("POST /api/setup/complete closes the setup window immediately, without waiting for a restart", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "x", metaAppSecret: "y", instagramAccountId: "1" };
+    const first = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal(first.status, 200);
+    const second = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal(second.status, 404);
+    await rm(config.envPath);
+  });
+});
+
 test("setup API routes are unreachable (404) once adminPassword is already configured", async () => {
   const config = baseConfig({ adminPassword: "already-configured", setupToken: "" });
   await withServer(config, async (baseUrl) => {
