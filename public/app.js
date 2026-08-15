@@ -1,4 +1,5 @@
 import { createEditor, wireToolbar } from "/editor.js";
+import { checkOnboarding } from "/onboarding.js";
 
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
@@ -39,6 +40,7 @@ async function request(path, options) {
 async function renderDashboard() {
   const dashboard = await request("/api/state");
   state.rules = dashboard.rules;
+  checkOnboarding(dashboard.rules);
   const active = dashboard.rules.filter((rule) => rule.enabled).length;
   const sent = dashboard.activity.filter((event) => event.status === "sent").length;
   const handled = dashboard.activity.filter((event) => event.status !== "ignored").length;
@@ -49,6 +51,15 @@ async function renderDashboard() {
   $("#connection").textContent = dashboard.configured ? "@eduardosantos.ia" : "configuração pendente";
   renderRules(dashboard.rules);
   renderActivity(dashboard.activity);
+  renderKeywordSuggestions(dashboard.keywordSuggestions || []);
+}
+
+function renderKeywordSuggestions(suggestions) {
+  $("#keyword-suggestions-total").textContent = `${suggestions.length} ${suggestions.length === 1 ? "sugestão" : "sugestões"}`;
+  $("#keyword-suggestions-list").innerHTML = suggestions.length ? suggestions.map((item) => `<article class="rule">
+    <div class="rule-icon">?</div><div><h3>${escapeHtml(truncate(item.sample, 60))}</h3><p>Comentado ${item.count} vezes sem nenhuma automação bater</p></div>
+    <div class="rule-actions"><button class="edit-rule" data-suggest-keyword="${escapeHtml(item.text)}">Criar automação</button></div>
+  </article>`).join("") : '<p class="empty">Nenhuma sugestão ainda — aparece quando um comentário se repete sem cair em nenhuma automação.</p>';
 }
 
 function renderRules(rules) {
@@ -56,7 +67,7 @@ function renderRules(rules) {
     <div class="rule-icon">${rule.followUpEnabled ? "⚡" : rule.mediaId ? "▣" : "↳"}</div><div><h3>${escapeHtml(rule.name)}${rule.followUpEnabled ? `<span class="delivery-badge">${rule.requireFollow ? "FOLLOW + LINK" : "LINK APÓS RESPOSTA"}</span>` : ""}</h3>
     <p>“${escapeHtml(rule.keyword)}” · ${rule.responseMode === "both" ? "pública + privada" : rule.responseMode === "private" ? "mensagem privada" : "resposta pública"}</p>
     <p>${rule.mediaId ? `Somente: ${escapeHtml(truncate(rule.mediaTitle || "Reel selecionado", 52))}` : "Todos os conteúdos"}</p><div class="journey-mini">${(rule.journey || []).map((step) => `<span title="${escapeHtml(step.summary)}">${escapeHtml(step.title)}</span>`).join("")}</div></div>
-    <div class="rule-actions"><button class="edit-rule" data-edit="${rule.id}">Editar</button><button class="icon-btn ${rule.enabled ? "" : "off"}" data-toggle="${rule.id}" title="Ativar/desativar">●</button><button class="icon-btn" data-delete="${rule.id}" title="Excluir">×</button></div>
+    <div class="rule-actions"><button class="edit-rule" data-edit="${rule.id}">Editar</button><button class="icon-btn ${rule.enabled ? "" : "off"}" data-toggle="${rule.id}" title="Ativar/desativar">●</button><button class="icon-btn" data-export="${rule.id}" title="Exportar pacote">⇩</button><button class="icon-btn" data-delete="${rule.id}" title="Excluir">×</button></div>
   </article>`).join("") : '<p class="empty">Nenhum fluxo ainda.<br>Escolha um Reel e crie a primeira palavra-chave.</p>';
 }
 
@@ -389,6 +400,27 @@ function syncPublicReplyCount() {
 }
 
 $("#new-rule").addEventListener("click", () => openRuleDialog());
+$("#import-package").addEventListener("click", () => $("#import-package-input").click());
+$("#import-package-input").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    const text = await file.text();
+    await request("/api/automation-packages/import", { method: "POST", body: text });
+    await renderDashboard();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+$("#keyword-suggestions-list").addEventListener("click", (event) => {
+  const keyword = event.target.dataset.suggestKeyword;
+  if (!keyword) return;
+  openRuleDialog();
+  const form = $("#rule-form");
+  form.elements.keyword.value = keyword;
+  form.elements.keyword.dispatchEvent(new Event("input", { bubbles: true }));
+});
 $("#automate-media").addEventListener("click", () => openRuleDialog(state.selectedMedia));
 $("#clear-scope").addEventListener("click", () => {
   const form = $("#rule-form");
@@ -474,6 +506,8 @@ $("#rule-form").addEventListener("submit", async (event) => {
 $("#rules").addEventListener("click", async (event) => {
   const edit = event.target.dataset.edit; const toggle = event.target.dataset.toggle; const remove = event.target.dataset.delete;
   if (edit) { const rule = state.rules.find((item) => item.id === edit); if (rule) openRuleDialog(null, rule); return; }
+  const exportRuleId = event.target.dataset.export;
+  if (exportRuleId) { window.open(`/api/rules/${exportRuleId}/export`, "_blank"); return; }
   if (toggle) await request(`/api/rules/${toggle}/toggle`, { method: "POST" });
   if (remove && confirm("Excluir esta automação?")) await request(`/api/rules/${remove}`, { method: "DELETE" });
   await renderDashboard();

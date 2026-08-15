@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRule, findMatchingRule, selectPublicReply, updateRule } from "../src/domain/automation.js";
+import { createRule, findMatchingRule, selectPublicReply, suggestKeywords, updateRule } from "../src/domain/automation.js";
 
 const rules = [
   { id: "1", keyword: "quero", match: "contains", enabled: true },
@@ -114,4 +114,35 @@ test("rejects combined mode without a public reply and more than ten alternative
   assert.throws(() => createRule({ keyword: "quero", reply: "DM", match: "contains", responseMode: "both" }), /resposta pública/i);
   assert.throws(() => createRule({ keyword: "quero", reply: "DM", match: "contains", responseMode: "both",
     publicReplies: Array.from({ length: 11 }, (_, index) => `Resposta ${index + 1}`) }), /10/);
+});
+
+test("suggestKeywords groups repeated ignored comments and sorts by frequency", () => {
+  const activity = [
+    { text: "quanto custa?", status: "ignored", at: "2026-01-01T10:00:00.000Z" },
+    { text: "Quanto Custa?", status: "ignored", at: "2026-01-01T11:00:00.000Z" },
+    { text: "tem desconto", status: "ignored", at: "2026-01-01T09:00:00.000Z" },
+    { text: "tem desconto", status: "ignored", at: "2026-01-01T12:00:00.000Z" },
+    { text: "tem desconto", status: "ignored", at: "2026-01-01T13:00:00.000Z" },
+  ];
+  const suggestions = suggestKeywords(activity, { minCount: 2 });
+  assert.deepEqual(suggestions.map((s) => s.text), ["tem desconto", "quanto custa?"]);
+  assert.equal(suggestions[0].count, 3);
+  assert.equal(suggestions[0].sample, "tem desconto");
+});
+
+test("suggestKeywords excludes human_takeover and non-ignored events", () => {
+  const activity = [
+    { text: "oi", status: "ignored", reason: "human_takeover", at: "2026-01-01T10:00:00.000Z" },
+    { text: "oi", status: "ignored", reason: "human_takeover", at: "2026-01-01T11:00:00.000Z" },
+    { text: "quero", status: "sent", at: "2026-01-01T10:00:00.000Z" },
+  ];
+  assert.deepEqual(suggestKeywords(activity, { minCount: 1 }), []);
+});
+
+test("suggestKeywords respects the limit option", () => {
+  const activity = Array.from({ length: 5 }, (_, index) => ([
+    { text: `palavra${index}`, status: "ignored", at: "2026-01-01T10:00:00.000Z" },
+    { text: `palavra${index}`, status: "ignored", at: "2026-01-01T11:00:00.000Z" },
+  ])).flat();
+  assert.equal(suggestKeywords(activity, { minCount: 2, limit: 3 }).length, 3);
 });

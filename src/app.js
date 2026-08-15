@@ -1,7 +1,8 @@
-import { createRule, findMatchingRule, selectPublicReply, updateRule } from "./domain/automation.js";
+import { createRule, findMatchingRule, selectPublicReply, suggestKeywords, updateRule } from "./domain/automation.js";
 import { buildAnalytics } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature } from "./meta/webhook.js";
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
+import { exportPackage, parsePackage } from "./domain/automation-package.js";
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
@@ -133,7 +134,8 @@ export function createApp({ store, meta, config, serveStatic }) {
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/state") {
-        const state = await store.read(); return json(response, 200, { rules: state.rules, activity: state.activity, configured: config.configured });
+        const state = await store.read();
+        return json(response, 200, { rules: state.rules, activity: state.activity, configured: config.configured, keywordSuggestions: suggestKeywords(state.activity) });
       }
       if (request.method === "GET" && url.pathname === "/api/media") {
         return json(response, 200, { media: await meta.listMedia() });
@@ -213,6 +215,28 @@ export function createApp({ store, meta, config, serveStatic }) {
       }
       if (rulePath && request.method === "DELETE") { await store.deleteRule(rulePath[1]); return json(response, 200, { ok: true }); }
       if (rulePath?.[2] && request.method === "POST") { await store.toggleRule(rulePath[1]); return json(response, 200, { ok: true }); }
+      const ruleExportPath = url.pathname.match(/^\/api\/rules\/([^/]+)\/export$/);
+      if (ruleExportPath && request.method === "GET") {
+        const state = await store.read();
+        const rule = state.rules.find((item) => item.id === ruleExportPath[1]);
+        if (!rule) return json(response, 404, { error: "Automação não encontrada." });
+        const campaignSlug = url.searchParams.get("campaignSlug");
+        const campaign = campaignSlug ? await store.getCampaignBySlug(campaignSlug) : null;
+        const pkg = exportPackage(rule, campaign);
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${rule.keyword || "automacao"}.json"` });
+        return response.end(JSON.stringify(pkg, null, 2));
+      }
+      if (request.method === "POST" && url.pathname === "/api/automation-packages/import") {
+        const { rule: ruleData, campaign: campaignData } = parsePackage((await readBody(request)).toString("utf8"));
+        const rule = createRule(ruleData);
+        await store.addRule(rule);
+        let campaign = null;
+        if (campaignData) {
+          campaign = createCampaign({ ...campaignData, contentHtml: sanitizeHtml(campaignData.contentHtml) });
+          await store.addCampaign(campaign);
+        }
+        return json(response, 201, { rule, campaign });
+      }
       return serveStatic(request, response, url.pathname);
     } catch (error) {
       console.error(error);

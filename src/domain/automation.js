@@ -16,6 +16,23 @@ export function findMatchingRule(text, rules, mediaId = null) {
   });
 }
 
+export function suggestKeywords(activity = [], { limit = 20, minCount = 2 } = {}) {
+  const groups = new Map();
+  for (const event of activity) {
+    if (event.status !== "ignored" || event.reason) continue;
+    const normalized = normalizeText(event.text);
+    if (!normalized) continue;
+    const group = groups.get(normalized) ?? { text: normalized, sample: event.text, count: 0, lastSeenAt: event.at };
+    group.count += 1;
+    if (event.at > group.lastSeenAt) { group.lastSeenAt = event.at; group.sample = event.text; }
+    groups.set(normalized, group);
+  }
+  return [...groups.values()]
+    .filter((group) => group.count >= minCount)
+    .sort((left, right) => right.count - left.count || String(right.lastSeenAt).localeCompare(String(left.lastSeenAt)))
+    .slice(0, limit);
+}
+
 export function buildJourney(input) {
   const enabled = (value) => value === true || value === "on";
   const keyword = String(input.keyword || "palavra-chave").trim();

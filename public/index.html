@@ -13,7 +13,12 @@
   </aside>
   <main id="top">
     <div id="view-dashboard" class="view">
-    <header><div><p class="eyebrow">ESTÚDIO DE CONVERSAS</p><h1>Seus comentários,<br><em>em movimento.</em></h1></div><button class="primary" id="new-rule">＋ Nova automação</button></header>
+    <header><div><p class="eyebrow">ESTÚDIO DE CONVERSAS</p><h1>Seus comentários,<br><em>em movimento.</em></h1></div><div style="display:flex;gap:8px"><button type="button" class="icon-btn" id="import-package" title="Importar pacote de automação">⇧ Importar</button><input type="file" id="import-package-input" accept="application/json" hidden><button class="primary" id="new-rule">＋ Nova automação</button></div></header>
+    <section class="onboarding-card" id="onboarding-card" hidden>
+      <div><p class="eyebrow">PRIMEIROS PASSOS</p><h2>Sua primeira automação em 3 passos</h2>
+      <p>1. Escolha um Reel na biblioteca abaixo (ou deixe em branco pra valer pra todos). 2. Clique em "Nova automação" e defina a palavra-chave que a pessoa vai comentar. 3. Escreva a resposta e salve — pronto, já está no ar.</p></div>
+      <button type="button" class="primary compact" id="onboarding-dismiss">Entendi →</button>
+    </section>
     <section class="stats"><article><span>Automações ativas</span><strong id="active-count">0</strong><i>↗</i></article><article><span>Respostas enviadas</span><strong id="sent-count">0</strong><i>↗</i></article><article><span>Taxa de resposta</span><strong id="response-rate">—</strong><i>↗</i></article></section>
     <section class="media-section" id="contents">
       <div class="section-head"><div><p class="eyebrow">BIBLIOTECA DO INSTAGRAM</p><h2>Escolha onde a conversa começa.</h2></div><div class="filters"><button class="filter active" data-filter="REELS">Reels</button><button class="filter" data-filter="ALL">Todos</button><button class="icon-btn refresh" id="refresh-media" title="Atualizar conteúdos">↻</button></div></div>
@@ -31,6 +36,10 @@
     <section class="contacts-section" id="contacts">
       <div class="section-head"><div><p class="eyebrow">PESSOAS</p><h2>Contatos e histórico</h2></div><label class="contact-search">Buscar<input id="contact-search" type="search" placeholder="Nome, tag ou mensagem"></label></div>
       <div class="contacts-layout"><div id="contacts-list" class="contacts-list"><p class="empty">Os contatos aparecerão após uma interação.</p></div><div id="contact-detail" class="contact-detail"><p class="empty">Selecione uma pessoa para ver a jornada completa.</p></div></div>
+    </section>
+    <section class="media-section" id="keyword-suggestions">
+      <div class="section-head"><div><p class="eyebrow">MINERADO DOS COMENTÁRIOS IGNORADOS</p><h2>Palavras-chave sugeridas</h2></div><span id="keyword-suggestions-total">0 sugestões</span></div>
+      <div id="keyword-suggestions-list" class="rule-list"></div>
     </section>
     <section class="content-grid">
       <div class="panel" id="automations"><div class="panel-head"><div><p class="eyebrow">FLUXOS</p><h2>Automações</h2></div><span id="rule-total">0 regras</span></div><div id="rules" class="rule-list"></div></div>
