@@ -73,6 +73,7 @@ export class JsonStore {
       if (Array.isArray(changes.tags)) contact.tags = [...new Set(changes.tags.map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 10);
       if (typeof changes.follower === "boolean") { contact.follower = changes.follower; contact.followerCheckedAt = new Date().toISOString(); }
       if (String(changes.note ?? "").trim()) contact.notes.unshift({ text: String(changes.note).trim(), at: new Date().toISOString() });
+      if (typeof changes.stage === "string") contact.stage = changes.stage;
       updated = contact;
     });
     return updated;
@@ -108,5 +109,16 @@ export class JsonStore {
   async listCampaigns() { const state = await this.read(); return state.campaigns ?? []; }
   async addLead(lead) { await this.update((state) => { state.leads ??= []; state.leads.unshift(lead); }); return lead; }
   async listLeads() { const state = await this.read(); return state.leads ?? []; }
+  async updateLead(id, changes) {
+    let updated = null;
+    await this.update((state) => {
+      state.leads ??= [];
+      const lead = state.leads.find((item) => item.id === id);
+      if (!lead) return;
+      if (typeof changes.stage === "string") lead.stage = changes.stage;
+      updated = lead;
+    });
+    return updated;
+  }
   async #write(state) { const temporary = `${this.path}.tmp`; await writeFile(temporary, JSON.stringify(state, null, 2)); await rename(temporary, this.path); }
 }

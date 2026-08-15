@@ -8,7 +8,7 @@
   <div class="grain"></div>
   <aside>
     <a class="brand" href="/"><span>MD</span> manydudu</a>
-    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button></nav>
+    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button></nav>
     <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
   </aside>
   <main id="top">
@@ -46,6 +46,14 @@
     <section class="contacts-section" id="leads">
       <div class="section-head"><div><p class="eyebrow">CAPTURADOS PELAS CAMPANHAS</p><h2>Leads</h2></div><span id="leads-total">0 leads</span></div>
       <div id="leads-list" class="rule-list"></div>
+    </section>
+    </div>
+    <div id="view-pipeline" class="view" hidden>
+    <header><div><p class="eyebrow">TUDO NUM LUGAR SÓ</p><h1>Pipeline<br><em>de quem chegou até você.</em></h1></div></header>
+    <section class="media-section" id="pipeline-section">
+      <div class="section-head"><div><p class="eyebrow">ORIGEM</p><h2>Filtrar por onde a pessoa chegou</h2></div></div>
+      <div id="pipeline-filters" class="pipeline-filters"></div>
+      <div id="pipeline-board" class="pipeline-board"></div>
     </section>
     </div>
   </main>

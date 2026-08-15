@@ -4,6 +4,9 @@ const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const truncate = (value = "", length = 80) => value.length > length ? `${value.slice(0, length)}…` : value;
 const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [] };
+const PIPELINE_STAGES = [["novo", "Novo"], ["contatado", "Contatado"], ["qualificado", "Qualificado"], ["cliente", "Cliente"]];
+let pipelineOrigin = "all";
+let draggedPipelineKey = null;
 const campaignEditor = createEditor($("#campaign-editor"));
 wireToolbar($("#editor-toolbar"), campaignEditor);
 
@@ -159,6 +162,57 @@ function renderLeads() {
     <span>${escapeHtml(lead.automationInterest)}</span>
     <div class="lead-niches">${lead.niches.map((niche) => `<span>${escapeHtml(niche === "Outro" && lead.nicheOther ? lead.nicheOther : niche)}</span>`).join("")}</div>
   </article>`).join("") : '<p class="empty">Nenhum lead capturado ainda.</p>';
+}
+
+function buildPipelineItems() {
+  const contactItems = state.contacts.map((contact) => ({
+    key: `contact:${contact.id}`, kind: "contact", id: contact.id,
+    label: `@${contact.username || "instagram"}`,
+    origin: "Instagram", originKey: "instagram",
+    detail: contact.history?.[0]?.text || "Sem histórico ainda",
+    stage: contact.stage || "novo",
+  }));
+  const leadItems = state.leads.map((lead) => {
+    const campaign = state.campaigns.find((item) => item.slug === lead.campaignSlug);
+    return {
+      key: `lead:${lead.id}`, kind: "lead", id: lead.id,
+      label: lead.name,
+      origin: campaign?.title || lead.campaignSlug, originKey: lead.campaignSlug,
+      detail: lead.automationInterest,
+      stage: lead.stage || "novo",
+    };
+  });
+  return [...contactItems, ...leadItems];
+}
+
+function renderPipelineFilters(items) {
+  const origins = [["all", "Todas as origens"], ["instagram", "Instagram"]];
+  const seen = new Set(["instagram"]);
+  for (const item of items) {
+    if (!seen.has(item.originKey)) { seen.add(item.originKey); origins.push([item.originKey, item.origin]); }
+  }
+  $("#pipeline-filters").innerHTML = origins.map(([key, label]) => `<button data-origin="${escapeHtml(key)}" class="${pipelineOrigin === key ? "active" : ""}">${escapeHtml(label)}</button>`).join("");
+}
+
+function renderPipelineBoard(items) {
+  const visible = pipelineOrigin === "all" ? items : items.filter((item) => item.originKey === pipelineOrigin);
+  $("#pipeline-board").innerHTML = PIPELINE_STAGES.map(([key, label]) => {
+    const cards = visible.filter((item) => item.stage === key);
+    return `<div class="pipeline-column" data-stage="${key}">
+      <div class="pipeline-column-head"><h3>${escapeHtml(label)}</h3><span>${cards.length}</span></div>
+      <div class="pipeline-cards">${cards.length ? cards.map((item) => `<article class="pipeline-card" draggable="true" data-key="${escapeHtml(item.key)}">
+        <strong>${escapeHtml(item.label)}</strong>
+        <small>${escapeHtml(truncate(item.detail || "", 60))}</small>
+        <span class="origin-badge">${escapeHtml(item.origin)}</span>
+      </article>`).join("") : '<p class="empty">Vazio</p>'}</div>
+    </div>`;
+  }).join("");
+}
+
+function renderPipeline() {
+  const items = buildPipelineItems();
+  renderPipelineFilters(items);
+  renderPipelineBoard(items);
 }
 
 function renderMedia() {
@@ -385,4 +439,49 @@ $("#campaign-form").addEventListener("submit", async (event) => {
 });
 $("#logout").addEventListener("click", async () => { await request("/api/logout", { method: "POST" }); window.location.href = "/login.html"; });
 
+$("#pipeline-filters").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-origin]");
+  if (!button) return;
+  pipelineOrigin = button.dataset.origin;
+  renderPipeline();
+});
+$("#pipeline-board").addEventListener("dragstart", (event) => {
+  const card = event.target.closest(".pipeline-card");
+  if (!card) return;
+  draggedPipelineKey = card.dataset.key;
+  card.classList.add("dragging");
+});
+$("#pipeline-board").addEventListener("dragend", (event) => {
+  event.target.closest(".pipeline-card")?.classList.remove("dragging");
+  draggedPipelineKey = null;
+});
+$("#pipeline-board").addEventListener("dragover", (event) => {
+  const column = event.target.closest(".pipeline-column");
+  if (!column) return;
+  event.preventDefault();
+  document.querySelectorAll(".pipeline-column").forEach((el) => el.classList.remove("drag-over"));
+  column.classList.add("drag-over");
+});
+$("#pipeline-board").addEventListener("dragleave", (event) => {
+  const column = event.target.closest(".pipeline-column");
+  if (column && !column.contains(event.relatedTarget)) column.classList.remove("drag-over");
+});
+$("#pipeline-board").addEventListener("drop", async (event) => {
+  const column = event.target.closest(".pipeline-column");
+  document.querySelectorAll(".pipeline-column").forEach((el) => el.classList.remove("drag-over"));
+  if (!column || !draggedPipelineKey) return;
+  event.preventDefault();
+  const stage = column.dataset.stage;
+  const separatorIndex = draggedPipelineKey.indexOf(":");
+  const kind = draggedPipelineKey.slice(0, separatorIndex);
+  const id = draggedPipelineKey.slice(separatorIndex + 1);
+  try {
+    await request(kind === "contact" ? `/api/contacts/${id}` : `/api/leads/${id}`, { method: "PATCH", body: JSON.stringify({ stage }) });
+    const record = (kind === "contact" ? state.contacts : state.leads).find((item) => item.id === id);
+    if (record) record.stage = stage;
+    renderPipeline();
+  } catch (error) { alert(error.message); }
+});
+
 await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads()]);
+renderPipeline();

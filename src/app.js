@@ -2,6 +2,7 @@ import { createRule, findMatchingRule, selectPublicReply, updateRule } from "./d
 import { buildAnalytics } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature } from "./meta/webhook.js";
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
+import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { sanitizeHtml } from "./util/html.js";
 import { renderContentPage, renderGatePage, renderNotFound } from "./pages/gate.js";
 import { checkPassword, clearSessionCookie, createAccessCookie, createSessionCookie, readAccessSlugs, readSession } from "./auth.js";
@@ -85,6 +86,13 @@ export function createApp({ store, meta, config, serveStatic }) {
       if (request.method === "GET" && url.pathname === "/api/leads") {
         return json(response, 200, { leads: await store.listLeads() });
       }
+      const leadAdminPath = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
+      if (leadAdminPath && request.method === "PATCH") {
+        const { stage } = JSON.parse(await readBody(request));
+        if (!PIPELINE_STAGES.includes(stage)) return json(response, 400, { error: "Estágio inválido." });
+        const lead = await store.updateLead(leadAdminPath[1], { stage });
+        return lead ? json(response, 200, lead) : json(response, 404, { error: "Lead não encontrado." });
+      }
       if (request.method === "GET" && url.pathname === "/webhook") {
         const valid = Boolean(config.verifyToken) && url.searchParams.get("hub.mode") === "subscribe" && url.searchParams.get("hub.verify_token") === config.verifyToken;
         response.writeHead(valid ? 200 : 403, { "Content-Type": "text/plain" }); return response.end(valid ? url.searchParams.get("hub.challenge") ?? "" : "Forbidden");
@@ -138,7 +146,9 @@ export function createApp({ store, meta, config, serveStatic }) {
         return contact ? json(response, 200, contact) : json(response, 404, { error: "Contato não encontrado." });
       }
       if (request.method === "PATCH" && contactPath) {
-        const contact = await store.updateContact(contactPath[1], JSON.parse(await readBody(request)));
+        const changes = JSON.parse(await readBody(request));
+        if (changes.stage !== undefined && !PIPELINE_STAGES.includes(changes.stage)) return json(response, 400, { error: "Estágio inválido." });
+        const contact = await store.updateContact(contactPath[1], changes);
         return contact ? json(response, 200, contact) : json(response, 404, { error: "Contato não encontrado." });
       }
       const contactActionPath = url.pathname.match(/^\/api\/contacts\/([^/]+)\/(messages|pause)$/);
