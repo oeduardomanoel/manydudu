@@ -1,0 +1,114 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { randomUUID, randomBytes } from "node:crypto";
+import { readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createApp } from "../src/app.js";
+
+function startTestServer(config) {
+  const server = createServer(createApp({ store: {}, meta: {}, config, serveStatic: (_req, res) => { res.writeHead(404); res.end(); } }));
+  return new Promise((resolve) => {
+    server.listen(0, () => resolve({ server, baseUrl: `http://127.0.0.1:${server.address().port}` }));
+  });
+}
+
+async function withServer(config, run) {
+  const { server, baseUrl } = await startTestServer(config);
+  try {
+    await run(baseUrl);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+function baseConfig(overrides = {}) {
+  return {
+    verifyToken: "", appSecret: "", configured: false, adminUser: "eduardo", adminPassword: "",
+    sessionSecret: "test-secret-with-plenty-of-entropy-for-hmac", setupToken: randomBytes(24).toString("hex"),
+    envPath: join(tmpdir(), `manydudu-setup-test-${randomUUID()}.env`),
+    ...overrides,
+  };
+}
+
+test("GET /setup is reachable with the correct token when no admin password is set", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/setup?token=${config.setupToken}`);
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /Configuração inicial/);
+  });
+});
+
+test("GET /setup returns 404 with a wrong token", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/setup?token=wrong`);
+    assert.equal(res.status, 404);
+  });
+});
+
+test("GET /setup returns 404 with no token at all", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/setup`);
+    assert.equal(res.status, 404);
+  });
+});
+
+test("/setup always returns 404 once an admin password exists, even if a stale token from before it was set is reused", async () => {
+  const staleToken = randomBytes(24).toString("hex");
+  const config = baseConfig({ adminPassword: "already-set", setupToken: staleToken });
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/setup?token=${staleToken}`);
+    assert.equal(res.status, 404);
+    const apiRes = await fetch(`${baseUrl}/api/setup/complete?token=${staleToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(apiRes.status, 404);
+  });
+});
+
+test("POST /api/setup/complete writes the env file and returns a fresh verify token", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "IGAALtest", metaAppSecret: "secret", instagramAccountId: "12345" };
+    const res = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal(res.status, 200);
+    const result = await res.json();
+    assert.equal(result.ok, true);
+    assert.equal(typeof result.metaVerifyToken, "string");
+    const written = await readFile(config.envPath, "utf8");
+    assert.match(written, /^ADMIN_USER=eduardo$/m);
+    assert.match(written, /^ADMIN_PASSWORD=senha-forte-123$/m);
+    assert.match(written, /^SESSION_SECRET=[0-9a-f]{64}$/m);
+    assert.match(written, /^META_ACCESS_TOKEN=IGAALtest$/m);
+    await rm(config.envPath);
+  });
+});
+
+test("POST /api/setup/complete rejects a short password without writing anything", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const body = { adminUser: "eduardo", adminPassword: "short", metaAccessToken: "x", metaAppSecret: "y", instagramAccountId: "1" };
+    const res = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal(res.status, 400);
+    await assert.rejects(readFile(config.envPath));
+  });
+});
+
+test("POST /api/setup/complete rejects mismatched Supabase fields (one filled, one empty)", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "x", metaAppSecret: "y", instagramAccountId: "1", supabaseUrl: "https://x.supabase.co" };
+    const res = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal(res.status, 400);
+  });
+});
+
+test("setup API routes are unreachable (404) once adminPassword is already configured", async () => {
+  const config = baseConfig({ adminPassword: "already-configured", setupToken: "" });
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/setup/test-meta`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(res.status, 404);
+  });
+});

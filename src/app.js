@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { createRule, findMatchingRule, selectPublicReply, suggestKeywords, updateRule } from "./domain/automation.js";
 import { buildAnalytics } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature } from "./meta/webhook.js";
@@ -8,7 +9,10 @@ import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
 import { renderContentPage, renderGatePage, renderNotFound } from "./pages/gate.js";
-import { checkPassword, clearCsrfCookie, clearLoginAttempts, clearSessionCookie, createAccessCookie, createCsrfCookie, createSessionCookie, isLeadRateLimited, isLoginRateLimited, isSecureRequest, readAccessSlugs, readSession, recordFailedLogin, recordLeadSubmission, verifyCsrf } from "./auth.js";
+import { renderSetupPage } from "./pages/setup.js";
+import { upsertEnvFile } from "./util/env-file.js";
+import { debugToken } from "./meta/token-refresh.js";
+import { checkPassword, clearCsrfCookie, clearLoginAttempts, clearSessionCookie, createAccessCookie, createCsrfCookie, createSessionCookie, isLeadRateLimited, isLoginRateLimited, isSecureRequest, isSetupRateLimited, isSetupRequestAuthorized, readAccessSlugs, readSession, recordFailedLogin, recordLeadSubmission, recordSetupAttempt, verifyCsrf } from "./auth.js";
 
 const json = (response, status, body) => { response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" }); response.end(JSON.stringify(body)); };
 const html = (response, status, body) => { response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" }); response.end(body); };
@@ -50,6 +54,67 @@ export function createApp({ store, meta, config, serveStatic }) {
         if (!campaign || !campaign.active) return html(response, 404, renderNotFound());
         const slugs = readAccessSlugs(request, config.sessionSecret);
         return html(response, 200, slugs.includes(campaign.slug) ? renderContentPage(campaign) : renderGatePage(campaign));
+      }
+      if (url.pathname === "/setup" || url.pathname.startsWith("/api/setup/")) {
+        if (!isSetupRequestAuthorized(request, url, config)) return html(response, 404, renderNotFound());
+        if (isSetupRateLimited(request)) return json(response, 429, { error: "Muitas tentativas. Aguarde um pouco e tente de novo." });
+        recordSetupAttempt(request);
+        if (request.method === "GET" && url.pathname === "/setup") {
+          return html(response, 200, renderSetupPage(url.searchParams.get("token")));
+        }
+        if (request.method === "POST" && url.pathname === "/api/setup/test-meta") {
+          const { metaAccessToken } = JSON.parse(await readBody(request));
+          if (!metaAccessToken) return json(response, 400, { error: "Informe o token de acesso." });
+          try {
+            const info = await debugToken(metaAccessToken);
+            const days = info.expires_at ? Math.max(0, Math.round((info.expires_at * 1000 - Date.now()) / 86400000)) : null;
+            return json(response, 200, { ok: true, message: days != null ? `Token válido — expira em ${days} dias.` : "Token válido." });
+          } catch (error) {
+            return json(response, 400, { error: `Não consegui validar o token: ${error.message}` });
+          }
+        }
+        if (request.method === "POST" && url.pathname === "/api/setup/test-supabase") {
+          const { supabaseUrl, supabaseSecretKey } = JSON.parse(await readBody(request));
+          if (!supabaseUrl && !supabaseSecretKey) return json(response, 200, { ok: true, message: "Sem Supabase — vai usar arquivo local." });
+          if (!supabaseUrl || !supabaseSecretKey) return json(response, 400, { error: "Informe URL e secret key, ou deixe os dois em branco." });
+          try {
+            const testResponse = await fetch(`${String(supabaseUrl).replace(/\/$/, "")}/rest/v1/`, { headers: { apikey: supabaseSecretKey }, signal: AbortSignal.timeout(6000) });
+            if (testResponse.status === 200) return json(response, 200, { ok: true, message: "Conectado ✓" });
+            return json(response, 400, { error: `Supabase respondeu ${testResponse.status} — confira a URL e a secret key.` });
+          } catch {
+            return json(response, 400, { error: "Não consegui conectar nesse endereço." });
+          }
+        }
+        if (request.method === "POST" && url.pathname === "/api/setup/complete") {
+          const input = JSON.parse(await readBody(request));
+          const adminUser = String(input.adminUser ?? "").trim();
+          const adminPassword = String(input.adminPassword ?? "");
+          if (!adminUser) throw new AppError("Informe o usuário do painel.");
+          if (adminPassword.length < 8) throw new AppError("A senha precisa ter pelo menos 8 caracteres.");
+          const metaAccessToken = String(input.metaAccessToken ?? "").trim();
+          const metaAppSecret = String(input.metaAppSecret ?? "").trim();
+          const instagramAccountId = String(input.instagramAccountId ?? "").trim();
+          if (!metaAccessToken || !metaAppSecret || !instagramAccountId) throw new AppError("Preencha as credenciais da Meta.");
+          const supabaseUrl = String(input.supabaseUrl ?? "").trim();
+          const supabaseSecretKey = String(input.supabaseSecretKey ?? "").trim();
+          if (Boolean(supabaseUrl) !== Boolean(supabaseSecretKey)) throw new AppError("Informe URL e secret key do Supabase juntas, ou deixe os dois em branco.");
+
+          const metaVerifyToken = randomBytes(16).toString("hex");
+          const updates = {
+            ADMIN_USER: adminUser, ADMIN_PASSWORD: adminPassword, SESSION_SECRET: randomBytes(32).toString("hex"),
+            META_ACCESS_TOKEN: metaAccessToken, META_APP_SECRET: metaAppSecret, META_VERIFY_TOKEN: metaVerifyToken,
+            INSTAGRAM_ACCOUNT_ID: instagramAccountId,
+          };
+          if (supabaseUrl) { updates.SUPABASE_URL = supabaseUrl; updates.SUPABASE_SECRET_KEY = supabaseSecretKey; }
+          await upsertEnvFile(config.envPath, updates);
+          return json(response, 200, { ok: true, metaVerifyToken });
+        }
+        if (request.method === "POST" && url.pathname === "/api/setup/restart") {
+          json(response, 200, { ok: true });
+          setImmediate(() => process.exit(0));
+          return;
+        }
+        return json(response, 404, { error: "Rota de configuração não encontrada." });
       }
       if (request.method === "POST" && url.pathname === "/api/leads") {
         if (isLeadRateLimited(request)) return json(response, 429, { error: "Muitos envios. Aguarde um pouco e tente de novo." });

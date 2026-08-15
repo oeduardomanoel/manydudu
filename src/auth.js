@@ -121,6 +121,20 @@ const leadLimiter = createRateLimiter({ max: 8, windowMs: 60 * 60 * 1000 });
 export const isLeadRateLimited = (request) => leadLimiter.isLimited(request);
 export const recordLeadSubmission = (request) => leadLimiter.record(request);
 
+const setupLimiter = createRateLimiter({ max: 30, windowMs: 60 * 60 * 1000 });
+export const isSetupRateLimited = (request) => setupLimiter.isLimited(request);
+export const recordSetupAttempt = (request) => setupLimiter.record(request);
+
+export function isSetupRequestAuthorized(request, url, config) {
+  if (config.adminPassword) return false;
+  if (!config.setupToken) return false;
+  const provided = url.searchParams.get("token");
+  if (!provided) return false;
+  const a = Buffer.from(String(provided));
+  const b = Buffer.from(config.setupToken);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 const CSRF_COOKIE = "md_csrf";
 
 export function createCsrfCookie(request) {

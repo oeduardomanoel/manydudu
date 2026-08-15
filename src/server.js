@@ -25,10 +25,16 @@ if (sessionSecret.length < MIN_SECRET_LENGTH) {
   console.warn(`AVISO: SESSION_SECRET ausente ou curto (mínimo ${MIN_SECRET_LENGTH} caracteres). Gerando um segredo temporário só para este processo — todas as sessões serão invalidadas a cada reinício. Defina SESSION_SECRET no .env para produção.`);
 }
 
+const setupToken = env.ADMIN_PASSWORD ? "" : randomBytes(24).toString("hex");
+
 const config = { verifyToken: env.META_VERIFY_TOKEN || "", appSecret: env.META_APP_SECRET || "",
   configured: Boolean(env.META_ACCESS_TOKEN && env.INSTAGRAM_ACCOUNT_ID && env.META_VERIFY_TOKEN && env.META_APP_SECRET),
-  adminUser: env.ADMIN_USER || "eduardo", adminPassword: env.ADMIN_PASSWORD || "", sessionSecret };
-if (!env.ADMIN_PASSWORD) console.warn("AVISO: ADMIN_PASSWORD não definida — o login admin ficará bloqueado até configurar.");
+  adminUser: env.ADMIN_USER || "eduardo", adminPassword: env.ADMIN_PASSWORD || "", sessionSecret, setupToken,
+  envPath: env.MANYDUDU_ENV_PATH || join(process.cwd(), ".env") };
+if (!env.ADMIN_PASSWORD) {
+  console.warn("AVISO: ADMIN_PASSWORD não definida — o login admin ficará bloqueado até configurar.");
+  console.warn(`Configuração inicial: acesse http://SEU-ENDERECO/setup?token=${setupToken}`);
+}
 
 const publicRoot = join(process.cwd(), "public");
 const mime = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
