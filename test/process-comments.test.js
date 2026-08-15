@@ -12,6 +12,7 @@ test("combined automation sends a private reply and rotates a public reply", asy
     claimEvent: async () => true,
     recordContactEvent: async () => {},
     isContactPaused: async () => false,
+    getContact: async () => null,
     read: async () => ({ rules: [rule], activity: [{ ruleId: "rule-1", status: "sent" }] }),
     setPendingDelivery: async (id, delivery) => { pending = { id, delivery }; },
     log: async () => {}
@@ -28,4 +29,27 @@ test("combined automation sends a private reply and rotates a public reply", asy
     { text: "Acabei de enviar!", mode: "public" }
   ]);
   assert.equal(pending.id, "person-1");
+});
+
+test("does not resend the same message text to a contact within 24h, even from a different rule", async () => {
+  const calls = [];
+  const logs = [];
+  const ruleA = { id: "rule-a", name: "A", keyword: "quero", match: "contains", enabled: true, responseMode: "private", reply: "Já te mando!" };
+  const ruleB = { id: "rule-b", name: "B", keyword: "manda", match: "contains", enabled: true, responseMode: "private", reply: "Já te mando!" };
+  const store = {
+    claimEvent: async () => true,
+    recordContactEvent: async () => {},
+    isContactPaused: async () => false,
+    getContact: async () => ({ history: [{ type: "outgoing_rule", text: "Já te mando!", at: new Date().toISOString() }] }),
+    read: async () => ({ rules: [ruleA, ruleB], activity: [] }),
+    setPendingDelivery: async () => {},
+    log: async (entry) => { logs.push(entry); },
+  };
+  const meta = { reply: async (_commentId, text, mode) => { calls.push({ text, mode }); return { recipient_id: "person-1" }; } };
+
+  await processComments([{ id: "comment-2", authorId: "person-1", username: "ana", text: "manda", mediaId: "reel-1" }], store, meta);
+
+  assert.deepEqual(calls, []);
+  assert.equal(logs[0].status, "ignored");
+  assert.equal(logs[0].reason, "fatigue_guard");
 });

@@ -7,6 +7,8 @@ import { exportPackage, parsePackage } from "./domain/automation-package.js";
 import { applyBackup, exportState, validateBackup } from "./domain/backup.js";
 import { buildHealthReport } from "./domain/health.js";
 import { paginateActivity } from "./domain/activity.js";
+import { isFatigued } from "./domain/fatigue.js";
+import { scoreContact, scoreLead } from "./domain/lead-score.js";
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
@@ -178,7 +180,8 @@ export function createApp({ store, meta, config, serveStatic }) {
         return json(response, 200, { ok: true });
       }
       if (request.method === "GET" && url.pathname === "/api/leads") {
-        return json(response, 200, { leads: await store.listLeads() });
+        const leads = await store.listLeads();
+        return json(response, 200, { leads: leads.map((lead) => ({ ...lead, score: scoreLead(lead) })) });
       }
       const leadAdminPath = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
       if (leadAdminPath && request.method === "PATCH") {
@@ -209,7 +212,8 @@ export function createApp({ store, meta, config, serveStatic }) {
         return json(response, 200, { media: await meta.listMedia() });
       }
       if (request.method === "GET" && url.pathname === "/api/contacts") {
-        return json(response, 200, { contacts: await store.listContacts() });
+        const contacts = await store.listContacts();
+        return json(response, 200, { contacts: contacts.map((contact) => ({ ...contact, score: scoreContact(contact) })) });
       }
       if (request.method === "GET" && url.pathname === "/api/analytics") {
         const state = await store.read();
@@ -359,9 +363,20 @@ export async function processComments(comments, store, meta) {
     const { rules, activity = [] } = await store.read(); const rule = findMatchingRule(comment.text, rules, comment.mediaId);
     const context = { id: comment.id, username: comment.username, text: comment.text, mediaId: comment.mediaId, at: new Date().toISOString() };
     if (!rule) { await store.log({ ...context, status: "ignored" }); continue; }
+    if (comment.authorId && ["private", "both"].includes(rule.responseMode)) {
+      const contact = await store.getContact(comment.authorId);
+      if (isFatigued(contact?.history, rule.reply)) {
+        await store.log({ ...context, status: "ignored", reason: "fatigue_guard", ruleId: rule.id, rule: rule.name });
+        continue;
+      }
+    }
     try {
       let privateResult = null;
-      if (["private", "both"].includes(rule.responseMode)) privateResult = await meta.reply(comment.id, rule.reply, "private");
+      if (["private", "both"].includes(rule.responseMode)) {
+        privateResult = await meta.reply(comment.id, rule.reply, "private");
+        if (comment.authorId) await store.recordContactEvent({ contactId: comment.authorId, username: comment.username,
+          type: "outgoing_rule", text: rule.reply, ruleId: rule.id, at: new Date().toISOString() });
+      }
       if (rule.followUpEnabled && privateResult?.recipient_id) await store.setPendingDelivery(String(privateResult.recipient_id), {
         ruleId: rule.id, ruleName: rule.name, text: rule.followUpText, url: rule.followUpUrl,
         requireFollow: rule.requireFollow, followPrompt: rule.followPrompt,

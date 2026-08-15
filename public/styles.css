@@ -38,3 +38,8 @@ dialog{width:min(560px,calc(100% - 28px));max-height:calc(100vh - 30px);overflow
 #health .dot-warn{color:var(--yellow)!important;text-shadow:0 0 12px #ffc85766}
 #health .dot-critical{color:var(--danger)!important;text-shadow:0 0 12px #ff668066}
 #audit-list .event details{margin-top:6px}#audit-list .event summary{cursor:pointer;color:var(--cyan);font-size:9px}#audit-list .event pre{margin:6px 0 0;padding:8px;background:#050a13;border-radius:6px;font-size:9px;line-height:1.5;overflow-x:auto;color:var(--muted)}
+.score-badge{padding:2px 6px;border-radius:4px;font:7px 'Martian Mono';font-weight:700}
+.score-badge.score-hot{background:#ff668024;color:var(--danger)}
+.score-badge.score-warm{background:#ffc8571a;color:var(--yellow)}
+.score-badge.score-cold{background:#7595ce1a;color:var(--muted)}
+.pipeline-detail-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

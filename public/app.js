@@ -22,6 +22,10 @@ function isOverdue(dateStr) {
   if (!dateStr) return false;
   return new Date(`${dateStr}T23:59:59`) < new Date();
 }
+
+function scoreTier(score) {
+  return score >= 70 ? "score-hot" : score >= 35 ? "score-warm" : "score-cold";
+}
 const campaignEditor = createEditor($("#campaign-editor"));
 wireToolbar($("#editor-toolbar"), campaignEditor);
 
@@ -194,16 +198,19 @@ function renderLeads() {
   </article>`).join("") : '<p class="empty">Nenhum lead capturado ainda.</p>';
 }
 
+const DM_EVENT_TYPES = new Set(["message", "postback", "outgoing"]);
+
 function buildPipelineItems() {
   const contactItems = state.contacts
-    .filter((contact) => (contact.history || []).some((event) => event.type !== "comment"))
+    .filter((contact) => (contact.history || []).some((event) => DM_EVENT_TYPES.has(event.type)))
     .map((contact) => ({
       key: `contact:${contact.id}`, kind: "contact", id: contact.id,
       label: contactLabel(contact),
       origin: "Instagram", originKey: "instagram",
-      detail: contact.history.find((event) => event.type !== "comment")?.text || "Sem histórico ainda",
+      detail: contact.history.find((event) => DM_EVENT_TYPES.has(event.type))?.text || "Sem histórico ainda",
       stage: contact.stage || "novo",
       pipelineNote: contact.pipelineNote || "", nextActionAt: contact.nextActionAt || "",
+      score: contact.score ?? 0,
       raw: contact,
     }));
   const leadItems = state.leads.map((lead) => {
@@ -215,6 +222,7 @@ function buildPipelineItems() {
       detail: lead.automationInterest,
       stage: lead.stage || "novo",
       pipelineNote: lead.pipelineNote || "", nextActionAt: lead.nextActionAt || "",
+      score: lead.score ?? 0,
       raw: lead,
     };
   });
@@ -240,7 +248,7 @@ function renderPipelineBoard(items) {
       <div class="pipeline-cards">${cards.length ? cards.map((item) => `<article class="pipeline-card" draggable="true" data-key="${escapeHtml(item.key)}">
         <strong>${escapeHtml(item.label)}</strong>
         <small>${escapeHtml(truncate(item.detail || "", 60))}</small>
-        <div class="card-badges"><span class="origin-badge">${escapeHtml(item.origin)}</span>${item.nextActionAt ? `<span class="next-action-badge ${isOverdue(item.nextActionAt) ? "overdue" : ""}">${new Date(`${item.nextActionAt}T00:00:00`).toLocaleDateString("pt-BR")}</span>` : ""}</div>
+        <div class="card-badges"><span class="score-badge ${scoreTier(item.score)}" title="Score de lead quente">🔥 ${item.score}</span><span class="origin-badge">${escapeHtml(item.origin)}</span>${item.nextActionAt ? `<span class="next-action-badge ${isOverdue(item.nextActionAt) ? "overdue" : ""}">${new Date(`${item.nextActionAt}T00:00:00`).toLocaleDateString("pt-BR")}</span>` : ""}</div>
       </article>`).join("") : '<p class="empty">Vazio</p>'}</div>
     </div>`;
   }).join("");
@@ -326,7 +334,7 @@ function openPipelineDetail(key) {
   const niches = item.kind === "lead" ? (item.raw.niches || []).map((niche) => niche === "Outro" && item.raw.nicheOther ? item.raw.nicheOther : niche) : [];
   const history = item.kind === "contact" ? (item.raw.history || []).slice(0, 15) : [];
   $("#pipeline-detail").innerHTML = `
-    <div class="pipeline-detail-head"><span class="origin-badge">${escapeHtml(item.origin)}</span><h2>${escapeHtml(item.label)}</h2></div>
+    <div class="pipeline-detail-head"><span class="origin-badge">${escapeHtml(item.origin)}</span><span class="score-badge ${scoreTier(item.score)}" title="Score de lead quente">🔥 ${item.score}</span><h2>${escapeHtml(item.label)}</h2></div>
     <a id="whatsapp-action" href="${escapeHtml(whatsapp || "#")}" target="_blank" rel="noopener" ${whatsapp ? "" : "aria-disabled=\"true\" style=\"pointer-events:none;opacity:.4\""}>${item.kind === "lead" ? "Abrir no WhatsApp →" : "Abrir DM no Instagram →"}</a>
     <div class="pipeline-detail-fields">${fields.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join("")}</div>
     ${niches.length ? `<div class="pipeline-detail-niches">${niches.map((niche) => `<span>${escapeHtml(niche)}</span>`).join("")}</div>` : ""}
