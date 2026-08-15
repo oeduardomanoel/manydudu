@@ -51,7 +51,7 @@
     <div id="view-pipeline" class="view" hidden>
     <header><div><p class="eyebrow">TUDO NUM LUGAR SÓ</p><h1>Pipeline<br><em>de quem chegou até você.</em></h1></div></header>
     <section class="media-section" id="pipeline-section">
-      <div class="section-head"><div><p class="eyebrow">ORIGEM</p><h2>Filtrar por onde a pessoa chegou</h2></div></div>
+      <div class="section-head"><div><p class="eyebrow">ORIGEM E BUSCA</p><h2>Filtrar por onde a pessoa chegou</h2></div><input id="pipeline-search" type="search" placeholder="Buscar por nome..."></div>
       <div id="pipeline-filters" class="pipeline-filters"></div>
       <div id="pipeline-board" class="pipeline-board"></div>
     </section>
@@ -102,6 +102,7 @@
     <label class="follow-check"><input type="checkbox" name="active" checked><span><strong>Campanha ativa</strong><small>Desative para tirar o link do ar sem apagar os dados.</small></span></label>
     <button class="primary wide" id="save-campaign" type="submit">Criar campanha →</button><p class="form-error" id="campaign-form-error" role="alert"></p>
   </form></dialog>
+  <dialog id="pipeline-dialog"><button type="button" class="close floating" data-close="pipeline-dialog">×</button><div id="pipeline-detail"></div></dialog>
   <dialog id="media-dialog" class="media-dialog"><div class="media-detail"><button type="button" class="close floating" data-close="media-dialog">×</button><div class="media-preview" id="detail-preview"></div><div class="comments-column"><div class="comments-head"><div><p class="eyebrow">CONVERSA NO CONTEÚDO</p><h2 id="detail-title">Comentários</h2></div><button class="primary compact" id="automate-media">＋ Automatizar</button></div><div id="detail-comments" class="comments-list"></div></div></div></dialog>
   <script type="module" src="/app.js"></script>
 </body></html>

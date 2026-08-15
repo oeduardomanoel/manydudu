@@ -4,9 +4,22 @@ const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const truncate = (value = "", length = 80) => value.length > length ? `${value.slice(0, length)}…` : value;
 const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [] };
-const PIPELINE_STAGES = [["novo", "Novo"], ["contatado", "Contatado"], ["qualificado", "Qualificado"], ["cliente", "Cliente"]];
+const PIPELINE_STAGES = [["novo", "Novo"], ["contatado", "Contatado"], ["qualificado", "Qualificado"], ["cliente", "Cliente"], ["perdido", "Perdido"]];
 let pipelineOrigin = "all";
+let pipelineSearch = "";
 let draggedPipelineKey = null;
+let pipelineItemsCache = [];
+
+function whatsappLink(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (!digits) return null;
+  return `https://wa.me/${digits.startsWith("55") ? digits : `55${digits}`}`;
+}
+
+function isOverdue(dateStr) {
+  if (!dateStr) return false;
+  return new Date(`${dateStr}T23:59:59`) < new Date();
+}
 const campaignEditor = createEditor($("#campaign-editor"));
 wireToolbar($("#editor-toolbar"), campaignEditor);
 
@@ -173,6 +186,8 @@ function buildPipelineItems() {
       origin: "Instagram", originKey: "instagram",
       detail: contact.history.find((event) => event.type !== "comment")?.text || "Sem histórico ainda",
       stage: contact.stage || "novo",
+      pipelineNote: contact.pipelineNote || "", nextActionAt: contact.nextActionAt || "",
+      raw: contact,
     }));
   const leadItems = state.leads.map((lead) => {
     const campaign = state.campaigns.find((item) => item.slug === lead.campaignSlug);
@@ -182,6 +197,8 @@ function buildPipelineItems() {
       origin: campaign?.title || lead.campaignSlug, originKey: lead.campaignSlug,
       detail: lead.automationInterest,
       stage: lead.stage || "novo",
+      pipelineNote: lead.pipelineNote || "", nextActionAt: lead.nextActionAt || "",
+      raw: lead,
     };
   });
   return [...contactItems, ...leadItems];
@@ -197,7 +214,8 @@ function renderPipelineFilters(items) {
 }
 
 function renderPipelineBoard(items) {
-  const visible = pipelineOrigin === "all" ? items : items.filter((item) => item.originKey === pipelineOrigin);
+  const query = pipelineSearch.trim().toLowerCase();
+  const visible = items.filter((item) => (pipelineOrigin === "all" || item.originKey === pipelineOrigin) && (!query || item.label.toLowerCase().includes(query)));
   $("#pipeline-board").innerHTML = PIPELINE_STAGES.map(([key, label]) => {
     const cards = visible.filter((item) => item.stage === key);
     return `<div class="pipeline-column" data-stage="${key}">
@@ -205,16 +223,53 @@ function renderPipelineBoard(items) {
       <div class="pipeline-cards">${cards.length ? cards.map((item) => `<article class="pipeline-card" draggable="true" data-key="${escapeHtml(item.key)}">
         <strong>${escapeHtml(item.label)}</strong>
         <small>${escapeHtml(truncate(item.detail || "", 60))}</small>
-        <span class="origin-badge">${escapeHtml(item.origin)}</span>
+        <div class="card-badges"><span class="origin-badge">${escapeHtml(item.origin)}</span>${item.nextActionAt ? `<span class="next-action-badge ${isOverdue(item.nextActionAt) ? "overdue" : ""}">${new Date(`${item.nextActionAt}T00:00:00`).toLocaleDateString("pt-BR")}</span>` : ""}</div>
       </article>`).join("") : '<p class="empty">Vazio</p>'}</div>
     </div>`;
   }).join("");
 }
 
 function renderPipeline() {
-  const items = buildPipelineItems();
-  renderPipelineFilters(items);
-  renderPipelineBoard(items);
+  pipelineItemsCache = buildPipelineItems();
+  renderPipelineFilters(pipelineItemsCache);
+  renderPipelineBoard(pipelineItemsCache);
+}
+
+function openPipelineDetail(key) {
+  const item = pipelineItemsCache.find((entry) => entry.key === key);
+  if (!item) return;
+  const whatsapp = item.kind === "lead" ? whatsappLink(item.raw.whatsapp) : `https://ig.me/m/${encodeURIComponent(item.raw.username || "")}`;
+  const fields = item.kind === "lead"
+    ? [["WhatsApp", escapeHtml(item.raw.whatsapp)], ["E-mail", `<a href="mailto:${escapeHtml(item.raw.email)}">${escapeHtml(item.raw.email)}</a>`], ["Campanha", escapeHtml(item.origin)], ["Capturado em", new Date(item.raw.createdAt).toLocaleString("pt-BR")]]
+    : [["Instagram", `@${escapeHtml(item.raw.username || "instagram")}`], ["Segue o perfil", item.raw.follower ? "Sim" : "Não verificado"], ["Última interação", new Date(item.raw.lastInteractionAt).toLocaleString("pt-BR")]];
+  const niches = item.kind === "lead" ? (item.raw.niches || []).map((niche) => niche === "Outro" && item.raw.nicheOther ? item.raw.nicheOther : niche) : [];
+  const history = item.kind === "contact" ? (item.raw.history || []).slice(0, 15) : [];
+  $("#pipeline-detail").innerHTML = `
+    <div class="pipeline-detail-head"><span class="origin-badge">${escapeHtml(item.origin)}</span><h2>${escapeHtml(item.label)}</h2></div>
+    <a id="whatsapp-action" href="${escapeHtml(whatsapp || "#")}" target="_blank" rel="noopener" ${whatsapp ? "" : "aria-disabled=\"true\" style=\"pointer-events:none;opacity:.4\""}>${item.kind === "lead" ? "Abrir no WhatsApp →" : "Abrir DM no Instagram →"}</a>
+    <div class="pipeline-detail-fields">${fields.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join("")}</div>
+    ${niches.length ? `<div class="pipeline-detail-niches">${niches.map((niche) => `<span>${escapeHtml(niche)}</span>`).join("")}</div>` : ""}
+    ${item.kind === "lead" ? `<p style="margin:-8px 0 16px;color:var(--muted);font-size:11px;line-height:1.5">${escapeHtml(item.raw.automationInterest)}</p>` : ""}
+    ${history.length ? `<div class="pipeline-detail-history">${history.map((event) => `<article class="history-event ${event.type}"><span>${event.type === "comment" ? "COMENTÁRIO" : event.type === "postback" ? "BOTÃO" : event.type === "outgoing" ? "VOCÊ" : "DIRECT"}</span><p>${escapeHtml(event.text)}</p><time>${new Date(event.at).toLocaleString("pt-BR")}</time></article>`).join("")}</div>` : ""}
+    <form id="pipeline-detail-form">
+      <label>Estágio<select name="stage">${PIPELINE_STAGES.map(([key, label]) => `<option value="${key}" ${item.stage === key ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select></label>
+      <label>Próxima ação (data)<input type="date" name="nextActionAt" value="${escapeHtml(item.nextActionAt || "")}"></label>
+      <label>Nota<textarea name="pipelineNote" maxlength="500" placeholder="Ex.: ligar depois de amanhã, mandou dúvida sobre preço...">${escapeHtml(item.pipelineNote || "")}</textarea></label>
+      <button class="primary wide" type="submit">Salvar →</button>
+      <p class="form-error" id="pipeline-detail-error" role="alert"></p>
+    </form>`;
+  $("#pipeline-detail-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = { stage: form.get("stage"), nextActionAt: form.get("nextActionAt") || "", pipelineNote: form.get("pipelineNote") || "" };
+    try {
+      await request(item.kind === "lead" ? `/api/leads/${item.id}` : `/api/contacts/${item.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      Object.assign(item.raw, payload);
+      $("#pipeline-dialog").close();
+      renderPipeline();
+    } catch (error) { $("#pipeline-detail-error").textContent = error.message; }
+  });
+  $("#pipeline-dialog").showModal();
 }
 
 function renderMedia() {
@@ -446,6 +501,11 @@ $("#pipeline-filters").addEventListener("click", (event) => {
   if (!button) return;
   pipelineOrigin = button.dataset.origin;
   renderPipeline();
+});
+$("#pipeline-search").addEventListener("input", (event) => { pipelineSearch = event.target.value; renderPipelineBoard(pipelineItemsCache); });
+$("#pipeline-board").addEventListener("click", (event) => {
+  const card = event.target.closest(".pipeline-card");
+  if (card) openPipelineDetail(card.dataset.key);
 });
 $("#pipeline-board").addEventListener("dragstart", (event) => {
   const card = event.target.closest(".pipeline-card");

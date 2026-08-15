@@ -74,6 +74,8 @@ export class JsonStore {
       if (typeof changes.follower === "boolean") { contact.follower = changes.follower; contact.followerCheckedAt = new Date().toISOString(); }
       if (String(changes.note ?? "").trim()) contact.notes.unshift({ text: String(changes.note).trim(), at: new Date().toISOString() });
       if (typeof changes.stage === "string") contact.stage = changes.stage;
+      if (typeof changes.pipelineNote === "string") contact.pipelineNote = changes.pipelineNote.trim().slice(0, 500);
+      if (typeof changes.nextActionAt === "string") contact.nextActionAt = changes.nextActionAt || null;
       updated = contact;
     });
     return updated;
@@ -116,6 +118,8 @@ export class JsonStore {
       const lead = state.leads.find((item) => item.id === id);
       if (!lead) return;
       if (typeof changes.stage === "string") lead.stage = changes.stage;
+      if (typeof changes.pipelineNote === "string") lead.pipelineNote = changes.pipelineNote.trim().slice(0, 500);
+      if (typeof changes.nextActionAt === "string") lead.nextActionAt = changes.nextActionAt || null;
       updated = lead;
     });
     return updated;

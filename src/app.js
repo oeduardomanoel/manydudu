@@ -88,9 +88,9 @@ export function createApp({ store, meta, config, serveStatic }) {
       }
       const leadAdminPath = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
       if (leadAdminPath && request.method === "PATCH") {
-        const { stage } = JSON.parse(await readBody(request));
-        if (!PIPELINE_STAGES.includes(stage)) return json(response, 400, { error: "Estágio inválido." });
-        const lead = await store.updateLead(leadAdminPath[1], { stage });
+        const changes = JSON.parse(await readBody(request));
+        if (changes.stage !== undefined && !PIPELINE_STAGES.includes(changes.stage)) return json(response, 400, { error: "Estágio inválido." });
+        const lead = await store.updateLead(leadAdminPath[1], changes);
         return lead ? json(response, 200, lead) : json(response, 404, { error: "Lead não encontrado." });
       }
       if (request.method === "GET" && url.pathname === "/webhook") {
