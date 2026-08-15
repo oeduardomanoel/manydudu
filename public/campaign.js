@@ -13,6 +13,7 @@ if (form) {
       niches: data.getAll("niches"),
       nicheOther: data.get("nicheOther"),
       automationInterest: data.get("automationInterest"),
+      company: data.get("company"),
     };
     const button = form.querySelector("button[type=submit]");
     button.disabled = true;

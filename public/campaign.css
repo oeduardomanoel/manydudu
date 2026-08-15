@@ -18,6 +18,7 @@
 .pill:hover{border-color:#ff713870;color:#fff0e8}
 .niche-other{margin-top:10px}
 .pill-group:has(input[value="Outro"]:checked)+.niche-other{display:block!important}
+.hp-field{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .form-error{min-height:16px;margin:0;color:var(--danger);font-size:11px;text-align:center}
 .gate-form .wide{width:100%;margin-top:4px}
 .gate-content{margin-top:6px;color:#e8e2d9;font-size:14px;line-height:1.7}

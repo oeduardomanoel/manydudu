@@ -31,6 +31,7 @@ export function renderGatePage(campaign) {
         </fieldset>
         <label>Qual automação te interessa agora?<textarea name="automationInterest" required maxlength="600" placeholder="Ex.: responder comentários e enviar material automaticamente"></textarea></label>
         <input type="hidden" name="slug" value="${escapeHtml(campaign.slug)}">
+        <label class="hp-field" aria-hidden="true">Empresa<input name="company" tabindex="-1" autocomplete="off"></label>
         <button class="primary wide" type="submit">Quero acessar →</button>
         <p class="form-error" id="form-error" role="alert"></p>
       </form>

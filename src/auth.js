@@ -84,34 +84,42 @@ export function createAccessCookie(slugs, secret, request) {
   return serializeCookie(ACCESS_COOKIE, token, { maxAgeSeconds: 180 * 86400, secure: isSecureRequest(request) });
 }
 
-const LOGIN_MAX_ATTEMPTS = 5;
-const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-const loginAttempts = new Map();
-
 export function getClientIp(request) {
   const forwarded = request.headers["x-forwarded-for"];
   if (forwarded) return String(forwarded).split(",")[0].trim();
   return request.socket?.remoteAddress || "unknown";
 }
 
-export function isLoginRateLimited(request) {
-  const entry = loginAttempts.get(getClientIp(request));
-  if (!entry) return false;
-  if (Date.now() - entry.firstAttemptAt > LOGIN_WINDOW_MS) return false;
-  return entry.count >= LOGIN_MAX_ATTEMPTS;
+function createRateLimiter({ max, windowMs }) {
+  const hits = new Map();
+  return {
+    isLimited(request) {
+      const entry = hits.get(getClientIp(request));
+      if (!entry) return false;
+      if (Date.now() - entry.firstAt > windowMs) return false;
+      return entry.count >= max;
+    },
+    record(request) {
+      const ip = getClientIp(request);
+      const now = Date.now();
+      const entry = hits.get(ip);
+      if (!entry || now - entry.firstAt > windowMs) hits.set(ip, { count: 1, firstAt: now });
+      else entry.count += 1;
+    },
+    clear(request) {
+      hits.delete(getClientIp(request));
+    },
+  };
 }
 
-export function recordFailedLogin(request) {
-  const ip = getClientIp(request);
-  const now = Date.now();
-  const entry = loginAttempts.get(ip);
-  if (!entry || now - entry.firstAttemptAt > LOGIN_WINDOW_MS) loginAttempts.set(ip, { count: 1, firstAttemptAt: now });
-  else entry.count += 1;
-}
+const loginLimiter = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
+export const isLoginRateLimited = (request) => loginLimiter.isLimited(request);
+export const recordFailedLogin = (request) => loginLimiter.record(request);
+export const clearLoginAttempts = (request) => loginLimiter.clear(request);
 
-export function clearLoginAttempts(request) {
-  loginAttempts.delete(getClientIp(request));
-}
+const leadLimiter = createRateLimiter({ max: 8, windowMs: 60 * 60 * 1000 });
+export const isLeadRateLimited = (request) => leadLimiter.isLimited(request);
+export const recordLeadSubmission = (request) => leadLimiter.record(request);
 
 const CSRF_COOKIE = "md_csrf";
 

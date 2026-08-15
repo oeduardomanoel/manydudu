@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   parseCookies, createSessionCookie, readSession, createAccessCookie, readAccessSlugs, checkPassword,
-  isLoginRateLimited, recordFailedLogin, clearLoginAttempts,
+  isLoginRateLimited, recordFailedLogin, clearLoginAttempts, isLeadRateLimited, recordLeadSubmission,
 } from "../src/auth.js";
 
 const SECRET = "test-secret-with-plenty-of-entropy-for-hmac";
@@ -85,5 +85,13 @@ test("clearLoginAttempts resets the counter for that IP", () => {
   for (let i = 0; i < 5; i++) recordFailedLogin(request);
   assert.equal(isLoginRateLimited(request), true);
   clearLoginAttempts(request);
+  assert.equal(isLoginRateLimited(request), false);
+});
+
+test("lead submission rate limiting blocks an IP after 8 submissions in an hour, independent of login limiter", () => {
+  const request = fakeRequestFromIp("203.0.113.40");
+  assert.equal(isLeadRateLimited(request), false);
+  for (let i = 0; i < 8; i++) recordLeadSubmission(request);
+  assert.equal(isLeadRateLimited(request), true);
   assert.equal(isLoginRateLimited(request), false);
 });

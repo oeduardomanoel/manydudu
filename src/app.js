@@ -6,7 +6,7 @@ import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
 import { renderContentPage, renderGatePage, renderNotFound } from "./pages/gate.js";
-import { checkPassword, clearCsrfCookie, clearLoginAttempts, clearSessionCookie, createAccessCookie, createCsrfCookie, createSessionCookie, isLoginRateLimited, isSecureRequest, readAccessSlugs, readSession, recordFailedLogin, verifyCsrf } from "./auth.js";
+import { checkPassword, clearCsrfCookie, clearLoginAttempts, clearSessionCookie, createAccessCookie, createCsrfCookie, createSessionCookie, isLeadRateLimited, isLoginRateLimited, isSecureRequest, readAccessSlugs, readSession, recordFailedLogin, recordLeadSubmission, verifyCsrf } from "./auth.js";
 
 const json = (response, status, body) => { response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" }); response.end(JSON.stringify(body)); };
 const html = (response, status, body) => { response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" }); response.end(body); };
@@ -50,7 +50,10 @@ export function createApp({ store, meta, config, serveStatic }) {
         return html(response, 200, slugs.includes(campaign.slug) ? renderContentPage(campaign) : renderGatePage(campaign));
       }
       if (request.method === "POST" && url.pathname === "/api/leads") {
-        const { slug, ...input } = JSON.parse(await readBody(request));
+        if (isLeadRateLimited(request)) return json(response, 429, { error: "Muitos envios. Aguarde um pouco e tente de novo." });
+        recordLeadSubmission(request);
+        const { slug, company, ...input } = JSON.parse(await readBody(request));
+        if (String(company ?? "").trim()) return json(response, 201, { ok: true });
         const campaign = await store.getCampaignBySlug(String(slug ?? ""));
         if (!campaign || !campaign.active) return json(response, 404, { error: "Campanha não encontrada." });
         const lead = createLead(input, campaign.slug);
