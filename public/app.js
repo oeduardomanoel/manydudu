@@ -165,13 +165,15 @@ function renderLeads() {
 }
 
 function buildPipelineItems() {
-  const contactItems = state.contacts.map((contact) => ({
-    key: `contact:${contact.id}`, kind: "contact", id: contact.id,
-    label: `@${contact.username || "instagram"}`,
-    origin: "Instagram", originKey: "instagram",
-    detail: contact.history?.[0]?.text || "Sem histórico ainda",
-    stage: contact.stage || "novo",
-  }));
+  const contactItems = state.contacts
+    .filter((contact) => (contact.history || []).some((event) => event.type !== "comment"))
+    .map((contact) => ({
+      key: `contact:${contact.id}`, kind: "contact", id: contact.id,
+      label: `@${contact.username || "instagram"}`,
+      origin: "Instagram", originKey: "instagram",
+      detail: contact.history.find((event) => event.type !== "comment")?.text || "Sem histórico ainda",
+      stage: contact.stage || "novo",
+    }));
   const leadItems = state.leads.map((lead) => {
     const campaign = state.campaigns.find((item) => item.slug === lead.campaignSlug);
     return {
