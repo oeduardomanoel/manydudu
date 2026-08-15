@@ -2,6 +2,7 @@ import { AppError } from "../util/errors.js";
 
 const FORMAT = "manydudu-automation-package";
 const VERSION = 1;
+const MAX_RAW_CONTENT_LENGTH = 200_000;
 
 const RULE_FIELDS = ["name", "keyword", "match", "reply", "publicReplies", "responseMode", "enabled",
   "followUpEnabled", "followUpText", "followUpUrl", "requireFollow", "followPrompt", "deliveryStyle", "buttonTitle",
@@ -25,5 +26,6 @@ export function parsePackage(raw) {
   if (data.format !== FORMAT) throw new AppError("Esse arquivo não é um pacote de automação do ManyDudu.");
   if (!data.rule || typeof data.rule !== "object") throw new AppError("Pacote sem automação.");
   const campaign = data.campaign && typeof data.campaign === "object" ? data.campaign : null;
+  if (campaign && String(campaign.contentHtml ?? "").length > MAX_RAW_CONTENT_LENGTH) throw new AppError("Conteúdo muito longo.");
   return { rule: data.rule, campaign };
 }

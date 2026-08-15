@@ -43,3 +43,8 @@ test("parsePackage rejects an unknown format", () => {
 test("parsePackage rejects a package without a rule", () => {
   assert.throws(() => parsePackage(JSON.stringify({ format: "manydudu-automation-package" })), AppError);
 });
+
+test("parsePackage rejects an oversized campaign contentHtml before it ever reaches sanitizeHtml", () => {
+  const pkg = { format: "manydudu-automation-package", rule: { keyword: "quero" }, campaign: { contentHtml: "a".repeat(200_001) } };
+  assert.throws(() => parsePackage(JSON.stringify(pkg)), AppError);
+});
