@@ -48,6 +48,64 @@ test("deliverStageChange rejects a URL resolving to the cloud metadata range at 
   assert.equal(fetchCalled, false);
 });
 
+function fakeRequestImpl(onOptions) {
+  return (options, callback) => {
+    onOptions(options);
+    const events = {};
+    const request = {
+      on: (event, handler) => { events[event] = handler; return request; },
+      write: () => {},
+      end: () => {
+        const response = { statusCode: 200, resume: () => {}, on: (event, handler) => { if (event === "end") handler(); } };
+        callback(response);
+      },
+      destroy: () => {},
+    };
+    return request;
+  };
+}
+
+test("deliverStageChange resolves DNS only once (no second resolution the fetch layer could rebind)", async () => {
+  let lookupCalls = 0;
+  const lookupImpl = async () => { lookupCalls++; return { address: "192.168.1.10" }; };
+  await deliverStageChange({
+    url: "https://n8n.local/webhook/abc",
+    payload: { a: 1 },
+    lookupImpl,
+    requestImpl: fakeRequestImpl(() => {}),
+  });
+  assert.equal(lookupCalls, 1);
+});
+
+test("deliverStageChange (default fetcher) connects to the resolved IP while keeping the original hostname for TLS SNI/Host", async () => {
+  let captured;
+  await deliverStageChange({
+    url: "https://n8n.local/webhook/abc?x=1",
+    payload: { hello: "world" },
+    lookupImpl: async () => ({ address: "192.168.1.10" }),
+    requestImpl: fakeRequestImpl((options) => { captured = options; }),
+  });
+  assert.equal(captured.host, "192.168.1.10");
+  assert.equal(captured.servername, "n8n.local");
+  assert.equal(captured.headers.Host, "n8n.local");
+  assert.equal(captured.path, "/webhook/abc?x=1");
+  assert.equal(captured.method, "POST");
+});
+
+test("deliverStageChange (default fetcher) rejects a target that resolves to the metadata range without ever sending the request", async () => {
+  let requestCalled = false;
+  await assert.rejects(
+    deliverStageChange({
+      url: "https://sneaky.example/hook",
+      payload: {},
+      lookupImpl: async () => ({ address: "169.254.169.254" }),
+      requestImpl: fakeRequestImpl(() => { requestCalled = true; }),
+    }),
+    /bloqueado/,
+  );
+  assert.equal(requestCalled, false);
+});
+
 test("deliverStageChange sends a POST with redirect:manual and the JSON payload for a legitimate target", async () => {
   const fakeLookup = async () => ({ address: "192.168.1.10" });
   let captured;
