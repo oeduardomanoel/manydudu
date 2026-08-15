@@ -1,7 +1,11 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { AppError } from "../util/errors.js";
+import { PIPELINE_STAGES } from "../domain/pipeline.js";
 
-const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [] };
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [], metaToken: null };
 
 export class JsonStore {
   constructor(path) { this.path = path; this.queue = Promise.resolve(); }
@@ -72,10 +76,10 @@ export class JsonStore {
       if (!contact) return;
       if (Array.isArray(changes.tags)) contact.tags = [...new Set(changes.tags.map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 10);
       if (typeof changes.follower === "boolean") { contact.follower = changes.follower; contact.followerCheckedAt = new Date().toISOString(); }
-      if (String(changes.note ?? "").trim()) contact.notes.unshift({ text: String(changes.note).trim(), at: new Date().toISOString() });
-      if (typeof changes.stage === "string") contact.stage = changes.stage;
+      if (String(changes.note ?? "").trim()) contact.notes.unshift({ text: String(changes.note).trim().slice(0, 500), at: new Date().toISOString() });
+      if (typeof changes.stage === "string" && PIPELINE_STAGES.includes(changes.stage)) contact.stage = changes.stage;
       if (typeof changes.pipelineNote === "string") contact.pipelineNote = changes.pipelineNote.trim().slice(0, 500);
-      if (typeof changes.nextActionAt === "string") contact.nextActionAt = changes.nextActionAt || null;
+      if (typeof changes.nextActionAt === "string" && (changes.nextActionAt === "" || DATE_ONLY.test(changes.nextActionAt))) contact.nextActionAt = changes.nextActionAt || null;
       updated = contact;
     });
     return updated;
@@ -90,7 +94,7 @@ export class JsonStore {
   async addCampaign(campaign) {
     await this.update((state) => {
       state.campaigns ??= [];
-      if (state.campaigns.some((item) => item.slug === campaign.slug)) throw new Error("Já existe uma campanha com esse slug.");
+      if (state.campaigns.some((item) => item.slug === campaign.slug)) throw new AppError("Já existe uma campanha com esse slug.");
       state.campaigns.unshift(campaign);
     });
     return campaign;
@@ -117,12 +121,14 @@ export class JsonStore {
       state.leads ??= [];
       const lead = state.leads.find((item) => item.id === id);
       if (!lead) return;
-      if (typeof changes.stage === "string") lead.stage = changes.stage;
+      if (typeof changes.stage === "string" && PIPELINE_STAGES.includes(changes.stage)) lead.stage = changes.stage;
       if (typeof changes.pipelineNote === "string") lead.pipelineNote = changes.pipelineNote.trim().slice(0, 500);
-      if (typeof changes.nextActionAt === "string") lead.nextActionAt = changes.nextActionAt || null;
+      if (typeof changes.nextActionAt === "string" && (changes.nextActionAt === "" || DATE_ONLY.test(changes.nextActionAt))) lead.nextActionAt = changes.nextActionAt || null;
       updated = lead;
     });
     return updated;
   }
+  async getMetaToken() { const state = await this.read(); return state.metaToken ?? null; }
+  async setMetaToken(token) { await this.update((state) => { state.metaToken = token; }); }
   async #write(state) { const temporary = `${this.path}.tmp`; await writeFile(temporary, JSON.stringify(state, null, 2)); await rename(temporary, this.path); }
 }

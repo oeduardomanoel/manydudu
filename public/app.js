@@ -24,8 +24,13 @@ function isOverdue(dateStr) {
 const campaignEditor = createEditor($("#campaign-editor"));
 wireToolbar($("#editor-toolbar"), campaignEditor);
 
+function getCsrfToken() {
+  const match = document.cookie.match(/(?:^|; )md_csrf=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
 async function request(path, options) {
-  const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  const response = await fetch(path, { headers: { "Content-Type": "application/json", "X-CSRF-Token": getCsrfToken() }, ...options });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Não foi possível concluir a solicitação.");
   return data;

@@ -3,13 +3,25 @@ import { buildAnalytics } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature } from "./meta/webhook.js";
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
+import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
 import { renderContentPage, renderGatePage, renderNotFound } from "./pages/gate.js";
-import { checkPassword, clearSessionCookie, createAccessCookie, createSessionCookie, readAccessSlugs, readSession } from "./auth.js";
+import { checkPassword, clearCsrfCookie, clearLoginAttempts, clearSessionCookie, createAccessCookie, createCsrfCookie, createSessionCookie, isLoginRateLimited, isSecureRequest, readAccessSlugs, readSession, recordFailedLogin, verifyCsrf } from "./auth.js";
 
 const json = (response, status, body) => { response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" }); response.end(JSON.stringify(body)); };
 const html = (response, status, body) => { response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" }); response.end(body); };
-const withCookie = (response, cookie) => response.setHeader("Set-Cookie", cookie);
+const withCookie = (response, cookie) => response.appendHeader("Set-Cookie", cookie);
+const WRITE_METHODS = new Set(["POST", "PATCH", "DELETE"]);
+
+const MAX_RAW_CONTENT_LENGTH = 200_000;
+const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; script-src 'self'; frame-ancestors 'none'";
+function applySecurityHeaders(request, response) {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.setHeader("Content-Security-Policy", CSP);
+  if (isSecureRequest(request)) response.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+}
 
 function requiresAuth(pathname, method) {
   if (pathname === "/" || pathname === "/index.html") return true;
@@ -21,13 +33,14 @@ function requiresAuth(pathname, method) {
 
 async function readBody(request, limit = 1_000_000) {
   const chunks = []; let size = 0;
-  for await (const chunk of request) { size += chunk.length; if (size > limit) throw new Error("Payload muito grande."); chunks.push(chunk); }
+  for await (const chunk of request) { size += chunk.length; if (size > limit) throw new AppError("Payload muito grande."); chunks.push(chunk); }
   return Buffer.concat(chunks);
 }
 
 export function createApp({ store, meta, config, serveStatic }) {
   return async (request, response) => {
     const url = new URL(request.url, "http://localhost");
+    applySecurityHeaders(request, response);
     try {
       const campaignPath = url.pathname.match(/^\/c\/([a-z0-9-]+)$/);
       if (request.method === "GET" && campaignPath) {
@@ -47,18 +60,25 @@ export function createApp({ store, meta, config, serveStatic }) {
         return json(response, 201, { ok: true });
       }
       if (request.method === "POST" && url.pathname === "/api/login") {
+        if (isLoginRateLimited(request)) return json(response, 429, { error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." });
         const { user, password } = JSON.parse(await readBody(request));
         const valid = checkPassword(user, config.adminUser) && config.adminPassword && checkPassword(password, config.adminPassword);
-        if (!valid) return json(response, 401, { error: "Usuário ou senha inválidos." });
+        if (!valid) { recordFailedLogin(request); return json(response, 401, { error: "Usuário ou senha inválidos." }); }
+        clearLoginAttempts(request);
         withCookie(response, createSessionCookie(user, config.sessionSecret, request));
+        withCookie(response, createCsrfCookie(request));
         return json(response, 200, { ok: true });
       }
       if (requiresAuth(url.pathname, request.method) && !readSession(request, config.sessionSecret)) {
         return url.pathname.startsWith("/api/") ? json(response, 401, { error: "Sessão expirada. Faça login novamente." })
           : (response.writeHead(302, { Location: "/login.html" }), response.end());
       }
+      if (WRITE_METHODS.has(request.method) && requiresAuth(url.pathname, request.method) && !verifyCsrf(request)) {
+        return json(response, 403, { error: "Token CSRF inválido ou ausente. Recarregue a página e tente de novo." });
+      }
       if (request.method === "POST" && url.pathname === "/api/logout") {
         withCookie(response, clearSessionCookie(request));
+        withCookie(response, clearCsrfCookie(request));
         return json(response, 200, { ok: true });
       }
       if (request.method === "GET" && url.pathname === "/api/campaigns") {
@@ -66,6 +86,7 @@ export function createApp({ store, meta, config, serveStatic }) {
       }
       if (request.method === "POST" && url.pathname === "/api/campaigns") {
         const input = JSON.parse(await readBody(request));
+        if (String(input.contentHtml ?? "").length > MAX_RAW_CONTENT_LENGTH) return json(response, 400, { error: "Conteúdo muito longo." });
         const campaign = createCampaign({ ...input, contentHtml: sanitizeHtml(input.contentHtml) });
         await store.addCampaign(campaign);
         return json(response, 201, campaign);
@@ -75,6 +96,7 @@ export function createApp({ store, meta, config, serveStatic }) {
         const existing = await store.getCampaignBySlug(campaignAdminPath[1]);
         if (!existing) return json(response, 404, { error: "Campanha não encontrada." });
         const input = JSON.parse(await readBody(request));
+        if (String(input.contentHtml ?? "").length > MAX_RAW_CONTENT_LENGTH) return json(response, 400, { error: "Conteúdo muito longo." });
         const campaign = updateCampaign(existing, { ...input, contentHtml: sanitizeHtml(input.contentHtml) });
         await store.replaceCampaign(existing.slug, campaign);
         return json(response, 200, campaign);
@@ -132,7 +154,7 @@ export function createApp({ store, meta, config, serveStatic }) {
       if (request.method === "POST" && moderationPath?.[2] === "reply") {
         const { message } = JSON.parse(await readBody(request));
         const text = String(message ?? "").trim();
-        if (!text || text.length > 1000) throw new Error("A resposta deve ter entre 1 e 1000 caracteres.");
+        if (!text || text.length > 1000) throw new AppError("A resposta deve ter entre 1 e 1000 caracteres.");
         const result = await meta.reply(moderationPath[1], text, "public");
         return json(response, 201, result);
       }
@@ -161,7 +183,7 @@ export function createApp({ store, meta, config, serveStatic }) {
       if (request.method === "POST" && contactActionPath?.[2] === "messages") {
         const { text } = JSON.parse(await readBody(request));
         const message = String(text ?? "").trim();
-        if (!message || message.length > 1000) throw new Error("A mensagem deve ter entre 1 e 1000 caracteres.");
+        if (!message || message.length > 1000) throw new AppError("A mensagem deve ter entre 1 e 1000 caracteres.");
         const contact = await store.getContact(contactActionPath[1]);
         if (!contact) return json(response, 404, { error: "Contato não encontrado." });
         await meta.sendDirect(contactActionPath[1], message);
@@ -189,7 +211,11 @@ export function createApp({ store, meta, config, serveStatic }) {
       if (rulePath && request.method === "DELETE") { await store.deleteRule(rulePath[1]); return json(response, 200, { ok: true }); }
       if (rulePath?.[2] && request.method === "POST") { await store.toggleRule(rulePath[1]); return json(response, 200, { ok: true }); }
       return serveStatic(request, response, url.pathname);
-    } catch (error) { console.error(error.message); return json(response, 400, { error: error.message }); }
+    } catch (error) {
+      console.error(error);
+      if (error instanceof AppError) return json(response, 400, { error: error.message });
+      return json(response, 500, { error: "Erro interno." });
+    }
   };
 }
 

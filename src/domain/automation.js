@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { AppError } from "../util/errors.js";
 
 export function normalizeText(value = "") {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
@@ -35,11 +36,11 @@ export function buildJourney(input) {
 export function createRule(input) {
   const keyword = String(input.keyword ?? "").trim();
   const reply = String(input.reply ?? "").trim();
-  if (!keyword || !reply) throw new Error("Palavra-chave e resposta são obrigatórias.");
-  if (!["contains", "exact"].includes(input.match)) throw new Error("Correspondência inválida.");
-  if (!["public", "private", "both"].includes(input.responseMode)) throw new Error("Canal inválido.");
+  if (!keyword || !reply) throw new AppError("Palavra-chave e resposta são obrigatórias.");
+  if (!["contains", "exact"].includes(input.match)) throw new AppError("Correspondência inválida.");
+  if (!["public", "private", "both"].includes(input.responseMode)) throw new AppError("Canal inválido.");
   const publicReplies = parsePublicReplies(input.publicReplies);
-  if (input.responseMode === "both" && !publicReplies.length) throw new Error("Informe ao menos uma resposta pública.");
+  if (input.responseMode === "both" && !publicReplies.length) throw new AppError("Informe ao menos uma resposta pública.");
   const followUpEnabled = input.followUpEnabled === true || input.followUpEnabled === "on";
   const followUpText = String(input.followUpText ?? "").trim();
   const followUpUrl = String(input.followUpUrl ?? "").trim();
@@ -52,18 +53,18 @@ export function createRule(input) {
   const profileUrl = String(input.profileUrl ?? "").trim();
   const followButtonTitle = String(input.followButtonTitle ?? "").trim();
   const confirmFollowTitle = String(input.confirmFollowTitle ?? "").trim();
-  if (followUpEnabled && !["private", "both"].includes(input.responseMode)) throw new Error("A entrega após resposta exige mensagem privada.");
-  if (followUpEnabled && (!followUpText || !followUpUrl)) throw new Error("Texto e link da entrega são obrigatórios.");
-  if (followUpEnabled && !isSecureUrl(followUpUrl)) throw new Error("O link de entrega precisa usar HTTPS.");
-  if (requireFollow && !followUpEnabled) throw new Error("A verificação de seguidor exige entrega após resposta.");
-  if (requireFollow && !followPrompt) throw new Error("Informe a mensagem para pedir que a pessoa siga o perfil.");
-  if (followUpEnabled && deliveryStyle === "button" && !buttonTitle) throw new Error("Informe o título do botão.");
-  if (buttonTitle.length > 20) throw new Error("O título do botão pode ter no máximo 20 caracteres.");
-  if (initialQuickReplyEnabled && (!initialQuickReplyTitle || initialQuickReplyTitle.length > 20)) throw new Error("A Quick Reply precisa ter um título de até 20 caracteres.");
-  if (initialQuickReplyEnabled && !["private", "both"].includes(input.responseMode)) throw new Error("Quick Reply exige mensagem privada.");
-  if (requireFollow && !isSecureUrl(profileUrl)) throw new Error("O link do perfil precisa usar HTTPS.");
-  if (requireFollow && (!followButtonTitle || !confirmFollowTitle)) throw new Error("Configure os botões de seguir e confirmar.");
-  if (followButtonTitle.length > 20 || confirmFollowTitle.length > 20) throw new Error("Os botões podem ter no máximo 20 caracteres.");
+  if (followUpEnabled && !["private", "both"].includes(input.responseMode)) throw new AppError("A entrega após resposta exige mensagem privada.");
+  if (followUpEnabled && (!followUpText || !followUpUrl)) throw new AppError("Texto e link da entrega são obrigatórios.");
+  if (followUpEnabled && !isSecureUrl(followUpUrl)) throw new AppError("O link de entrega precisa usar HTTPS.");
+  if (requireFollow && !followUpEnabled) throw new AppError("A verificação de seguidor exige entrega após resposta.");
+  if (requireFollow && !followPrompt) throw new AppError("Informe a mensagem para pedir que a pessoa siga o perfil.");
+  if (followUpEnabled && deliveryStyle === "button" && !buttonTitle) throw new AppError("Informe o título do botão.");
+  if (buttonTitle.length > 20) throw new AppError("O título do botão pode ter no máximo 20 caracteres.");
+  if (initialQuickReplyEnabled && (!initialQuickReplyTitle || initialQuickReplyTitle.length > 20)) throw new AppError("A Quick Reply precisa ter um título de até 20 caracteres.");
+  if (initialQuickReplyEnabled && !["private", "both"].includes(input.responseMode)) throw new AppError("Quick Reply exige mensagem privada.");
+  if (requireFollow && !isSecureUrl(profileUrl)) throw new AppError("O link do perfil precisa usar HTTPS.");
+  if (requireFollow && (!followButtonTitle || !confirmFollowTitle)) throw new AppError("Configure os botões de seguir e confirmar.");
+  if (followButtonTitle.length > 20 || confirmFollowTitle.length > 20) throw new AppError("Os botões podem ter no máximo 20 caracteres.");
   const journey = buildJourney({ ...input, keyword, followUpEnabled, requireFollow, initialQuickReplyEnabled, deliveryStyle });
   return { id: randomUUID(), name: String(input.name || keyword).trim(), keyword, reply, publicReplies,
     match: input.match, responseMode: input.responseMode, enabled: input.enabled !== false,
@@ -80,7 +81,7 @@ export function selectPublicReply(rule, sentCount = 0) {
 }
 
 export function updateRule(existing, input) {
-  if (!existing) throw new Error("Automação não encontrada.");
+  if (!existing) throw new AppError("Automação não encontrada.");
   const preserved = {
     initialQuickReplyEnabled: existing.initialQuickReplyEnabled,
     initialQuickReplyTitle: existing.initialQuickReplyTitle
@@ -97,7 +98,7 @@ function isSecureUrl(value) {
 function parsePublicReplies(value) {
   const items = Array.isArray(value) ? value : String(value ?? "").split(/\r?\n/);
   const replies = [...new Set(items.map((item) => String(item).trim()).filter(Boolean))];
-  if (replies.length > 10) throw new Error("Configure no máximo 10 respostas públicas.");
-  if (replies.some((reply) => reply.length > 1000)) throw new Error("Cada resposta pública pode ter no máximo 1000 caracteres.");
+  if (replies.length > 10) throw new AppError("Configure no máximo 10 respostas públicas.");
+  if (replies.some((reply) => reply.length > 1000)) throw new AppError("Cada resposta pública pode ter no máximo 1000 caracteres.");
   return replies;
 }

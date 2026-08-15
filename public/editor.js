@@ -1,4 +1,13 @@
 const ALLOWED_TAGS = new Set(["P", "BR", "STRONG", "B", "EM", "I", "U", "A", "H2", "H3", "UL", "OL", "LI", "BLOCKQUOTE", "HR", "SPAN", "DIV"]);
+const ALLOWED_HREF_SCHEMES = new Set(["http:", "https:", "mailto:"]);
+
+function isSafeHref(value) {
+  try {
+    return ALLOWED_HREF_SCHEMES.has(new URL(String(value ?? ""), "https://sanitize.invalid").protocol);
+  } catch {
+    return false;
+  }
+}
 
 function cleanNode(node) {
   for (const child of [...node.childNodes]) {
@@ -9,7 +18,7 @@ function cleanNode(node) {
       continue;
     }
     for (const attr of [...child.attributes]) {
-      if (child.tagName === "A" && attr.name === "href") { if (/^\s*javascript:/i.test(attr.value)) child.removeAttribute("href"); continue; }
+      if (child.tagName === "A" && attr.name === "href") { if (!isSafeHref(attr.value)) child.removeAttribute("href"); continue; }
       child.removeAttribute(attr.name);
     }
     cleanNode(child);
