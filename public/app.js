@@ -107,6 +107,11 @@ async function loadAnalytics() {
   $("#rule-metrics").innerHTML = analytics.rules.length ? analytics.rules.map((rule) => `<article><div><strong>${escapeHtml(rule.name)}</strong><small>${rule.enabled ? "ativa" : "pausada"}</small></div><span>${rule.captured} capturas</span><span>${rule.replied} respostas</span><b>${rule.deliveryRate}%</b></article>`).join("") : '<p class="empty">Crie uma automação para começar a medir o funil.</p>';
 }
 
+async function loadContentRoi() {
+  const { items } = await request("/api/content-roi");
+  $("#content-roi").innerHTML = items.length ? items.map((item) => `<article><div><strong>${escapeHtml(truncate(item.media?.caption || "Conteúdo removido", 60))}</strong><small>${item.media ? "" : `id: ${escapeHtml(item.mediaId)}`}</small></div><span>${item.total} ${item.total === 1 ? "contato" : "contatos"}</span><span>${item.byStage.cliente || 0} clientes</span><b>${item.conversionRate}%</b></article>`).join("") : '<p class="empty">Ainda não há contatos com origem em um conteúdo específico.</p>';
+}
+
 async function loadModeration() {
   $("#moderation-list").innerHTML = '<p class="empty">Sincronizando comentários...</p>';
   try { const result = await request("/api/moderation/comments"); state.moderation = result.comments; renderModeration(); }
@@ -657,5 +662,5 @@ $("#pipeline-board").addEventListener("drop", async (event) => {
   } catch (error) { alert(error.message); }
 });
 
-await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit()]);
+await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit(), loadContentRoi()]);
 renderPipeline();

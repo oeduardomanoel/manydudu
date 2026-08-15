@@ -9,6 +9,7 @@ import { buildHealthReport } from "./domain/health.js";
 import { paginateActivity } from "./domain/activity.js";
 import { isFatigued } from "./domain/fatigue.js";
 import { scoreContact, scoreLead } from "./domain/lead-score.js";
+import { buildContentRoi } from "./domain/roi.js";
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
@@ -297,6 +298,13 @@ export function createApp({ store, meta, config, serveStatic }) {
         const pkg = exportPackage(rule, campaign);
         response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${rule.keyword || "automacao"}.json"` });
         return response.end(JSON.stringify(pkg, null, 2));
+      }
+      if (request.method === "GET" && url.pathname === "/api/content-roi") {
+        const contacts = await store.listContacts();
+        let media = [];
+        try { media = await meta.listMedia(50); } catch { media = []; }
+        const mediaLookup = Object.fromEntries(media.map((item) => [item.id, item]));
+        return json(response, 200, { items: buildContentRoi(contacts, mediaLookup) });
       }
       if (request.method === "GET" && url.pathname === "/api/activity") {
         const state = await store.read();
