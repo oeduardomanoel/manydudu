@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { upsertEnvFile } from "../src/util/env-file.js";
+import { readEnvFile, upsertEnvFile } from "../src/util/env-file.js";
+import { AppError } from "../src/util/errors.js";
 
 function tempPath() {
   return join(tmpdir(), `manydudu-env-test-${randomUUID()}.env`);
@@ -40,6 +41,20 @@ test("upsertEnvFile appends keys that don't already exist in the file", async ()
   assert.match(content, /^PORT=3000$/m);
   assert.match(content, /^SESSION_SECRET=xyz$/m);
   await rm(path);
+});
+
+test("upsertEnvFile rejects values with a newline instead of injecting extra lines", async () => {
+  const path = tempPath();
+  await assert.rejects(
+    () => upsertEnvFile(path, { ADMIN_PASSWORD: "x\nSESSION_SECRET=leaked" }),
+    AppError,
+  );
+  await assert.rejects(
+    () => upsertEnvFile(path, { ADMIN_PASSWORD: "x\r\nSESSION_SECRET=leaked" }),
+    AppError,
+  );
+  const content = await readEnvFile(path);
+  assert.equal(content.includes("leaked"), false);
 });
 
 test("upsertEnvFile is idempotent when applied twice with the same values", async () => {

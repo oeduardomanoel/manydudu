@@ -1,4 +1,5 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
+import { AppError } from "./errors.js";
 
 export async function readEnvFile(path) {
   try {
@@ -10,6 +11,9 @@ export async function readEnvFile(path) {
 }
 
 export async function upsertEnvFile(path, updates) {
+  for (const [key, value] of Object.entries(updates)) {
+    if (/[\r\n]/.test(String(value))) throw new AppError(`Valor de ${key} não pode conter quebra de linha.`);
+  }
   const current = await readEnvFile(path);
   const lines = current.length ? current.split(/\r?\n/) : [];
   const seen = new Set();
