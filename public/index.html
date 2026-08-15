@@ -8,8 +8,8 @@
   <div class="grain"></div>
   <aside>
     <a class="brand" href="/"><span>MD</span> manydudu</a>
-    <nav><button class="active" data-scroll="top">◈ <span>Visão geral</span></button><button data-scroll="contents">▣ <span>Conteúdos</span></button><button data-scroll="automations">⌁ <span>Automações</span></button><button data-scroll="activity-panel">◎ <span>Atividade</span></button></nav>
-    <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div></div>
+    <nav><button class="active" data-scroll="top">◈ <span>Visão geral</span></button><button data-scroll="contents">▣ <span>Conteúdos</span></button><button data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-scroll="leads">☰ <span>Leads</span></button><button data-scroll="automations">⌁ <span>Automações</span></button><button data-scroll="activity-panel">◎ <span>Atividade</span></button></nav>
+    <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
   </aside>
   <main id="top">
     <header><div><p class="eyebrow">ESTÚDIO DE CONVERSAS</p><h1>Seus comentários,<br><em>em movimento.</em></h1></div><button class="primary" id="new-rule">＋ Nova automação</button></header>
@@ -30,6 +30,14 @@
     <section class="contacts-section" id="contacts">
       <div class="section-head"><div><p class="eyebrow">PESSOAS</p><h2>Contatos e histórico</h2></div><label class="contact-search">Buscar<input id="contact-search" type="search" placeholder="Nome, tag ou mensagem"></label></div>
       <div class="contacts-layout"><div id="contacts-list" class="contacts-list"><p class="empty">Os contatos aparecerão após uma interação.</p></div><div id="contact-detail" class="contact-detail"><p class="empty">Selecione uma pessoa para ver a jornada completa.</p></div></div>
+    </section>
+    <section class="media-section" id="campaigns">
+      <div class="section-head"><div><p class="eyebrow">ENTREGA COM CAPTURA DE LEAD</p><h2>Campanhas</h2></div><button class="primary" id="new-campaign">＋ Nova campanha</button></div>
+      <div id="campaigns-list" class="rule-list"></div>
+    </section>
+    <section class="contacts-section" id="leads">
+      <div class="section-head"><div><p class="eyebrow">CAPTURADOS PELAS CAMPANHAS</p><h2>Leads</h2></div><span id="leads-total">0 leads</span></div>
+      <div id="leads-list" class="rule-list"></div>
     </section>
     <section class="content-grid">
       <div class="panel" id="automations"><div class="panel-head"><div><p class="eyebrow">FLUXOS</p><h2>Automações</h2></div><span id="rule-total">0 regras</span></div><div id="rules" class="rule-list"></div></div>
@@ -61,6 +69,25 @@
       <div id="button-fields"><label>Texto do botão<input name="buttonTitle" placeholder="ACESSAR MATERIAL" maxlength="20" value="ACESSAR MATERIAL"></label><div class="button-preview"><small>PRÉVIA NO DIRECT</small><p>Seu material está pronto 👇</p><button type="button" tabindex="-1" id="button-preview-label">ACESSAR MATERIAL</button></div></div>
     </div>
     <button class="primary wide" id="save-rule" type="submit">Criar automação →</button><p class="form-error" id="form-error" role="alert"></p>
+  </form></dialog>
+  <dialog id="campaign-dialog"><form id="campaign-form"><div class="dialog-head"><div><p class="eyebrow" id="campaign-dialog-mode">NOVA CAMPANHA</p><h2>Conteúdo entregue após o formulário</h2></div><button type="button" class="close" data-close="campaign-dialog">×</button></div>
+    <label>Título<input name="title" placeholder="Guia de automação para Reels" required maxlength="140"></label>
+    <label>Link da campanha<input name="slug" id="campaign-slug" placeholder="gerado a partir do título" maxlength="60"></label>
+    <label>Conteúdo da entrega
+      <div class="editor-toolbar" id="editor-toolbar">
+        <button type="button" data-command="bold" title="Negrito"><b>B</b></button>
+        <button type="button" data-command="italic" title="Itálico"><i>I</i></button>
+        <button type="button" data-command="formatBlock" data-value="h2" title="Título">H2</button>
+        <button type="button" data-command="formatBlock" data-value="h3" title="Subtítulo">H3</button>
+        <button type="button" data-command="insertUnorderedList" title="Lista">≡</button>
+        <button type="button" data-command="insertOrderedList" title="Lista numerada">1.</button>
+        <button type="button" data-command="formatBlock" data-value="blockquote" title="Citação">”</button>
+        <button type="button" data-command="createLink" data-value="" id="editor-link" title="Link">🔗</button>
+      </div>
+      <div class="editor-body" id="campaign-editor"></div>
+    </label>
+    <label class="follow-check"><input type="checkbox" name="active" checked><span><strong>Campanha ativa</strong><small>Desative para tirar o link do ar sem apagar os dados.</small></span></label>
+    <button class="primary wide" id="save-campaign" type="submit">Criar campanha →</button><p class="form-error" id="campaign-form-error" role="alert"></p>
   </form></dialog>
   <dialog id="media-dialog" class="media-dialog"><div class="media-detail"><button type="button" class="close floating" data-close="media-dialog">×</button><div class="media-preview" id="detail-preview"></div><div class="comments-column"><div class="comments-head"><div><p class="eyebrow">CONVERSA NO CONTEÚDO</p><h2 id="detail-title">Comentários</h2></div><button class="primary compact" id="automate-media">＋ Automatizar</button></div><div id="detail-comments" class="comments-list"></div></div></div></dialog>
   <script type="module" src="/app.js"></script>

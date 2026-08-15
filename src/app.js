@@ -1,8 +1,22 @@
 import { createRule, findMatchingRule, selectPublicReply, updateRule } from "./domain/automation.js";
 import { buildAnalytics } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature } from "./meta/webhook.js";
+import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
+import { sanitizeHtml } from "./util/html.js";
+import { renderContentPage, renderGatePage, renderNotFound } from "./pages/gate.js";
+import { checkPassword, clearSessionCookie, createAccessCookie, createSessionCookie, readAccessSlugs, readSession } from "./auth.js";
 
 const json = (response, status, body) => { response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" }); response.end(JSON.stringify(body)); };
+const html = (response, status, body) => { response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" }); response.end(body); };
+const withCookie = (response, cookie) => response.setHeader("Set-Cookie", cookie);
+
+function requiresAuth(pathname, method) {
+  if (pathname === "/" || pathname === "/index.html") return true;
+  if (!pathname.startsWith("/api/")) return false;
+  if (pathname === "/api/login") return false;
+  if (pathname === "/api/leads" && method === "POST") return false;
+  return true;
+}
 
 async function readBody(request, limit = 1_000_000) {
   const chunks = []; let size = 0;
@@ -14,6 +28,63 @@ export function createApp({ store, meta, config, serveStatic }) {
   return async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     try {
+      const campaignPath = url.pathname.match(/^\/c\/([a-z0-9-]+)$/);
+      if (request.method === "GET" && campaignPath) {
+        const campaign = await store.getCampaignBySlug(campaignPath[1]);
+        if (!campaign || !campaign.active) return html(response, 404, renderNotFound());
+        const slugs = readAccessSlugs(request, config.sessionSecret);
+        return html(response, 200, slugs.includes(campaign.slug) ? renderContentPage(campaign) : renderGatePage(campaign));
+      }
+      if (request.method === "POST" && url.pathname === "/api/leads") {
+        const { slug, ...input } = JSON.parse(await readBody(request));
+        const campaign = await store.getCampaignBySlug(String(slug ?? ""));
+        if (!campaign || !campaign.active) return json(response, 404, { error: "Campanha não encontrada." });
+        const lead = createLead(input, campaign.slug);
+        await store.addLead(lead);
+        const slugs = readAccessSlugs(request, config.sessionSecret);
+        withCookie(response, createAccessCookie([...slugs, campaign.slug], config.sessionSecret, request));
+        return json(response, 201, { ok: true });
+      }
+      if (request.method === "POST" && url.pathname === "/api/login") {
+        const { user, password } = JSON.parse(await readBody(request));
+        const valid = checkPassword(user, config.adminUser) && config.adminPassword && checkPassword(password, config.adminPassword);
+        if (!valid) return json(response, 401, { error: "Usuário ou senha inválidos." });
+        withCookie(response, createSessionCookie(user, config.sessionSecret, request));
+        return json(response, 200, { ok: true });
+      }
+      if (requiresAuth(url.pathname, request.method) && !readSession(request, config.sessionSecret)) {
+        return url.pathname.startsWith("/api/") ? json(response, 401, { error: "Sessão expirada. Faça login novamente." })
+          : (response.writeHead(302, { Location: "/login.html" }), response.end());
+      }
+      if (request.method === "POST" && url.pathname === "/api/logout") {
+        withCookie(response, clearSessionCookie(request));
+        return json(response, 200, { ok: true });
+      }
+      if (request.method === "GET" && url.pathname === "/api/campaigns") {
+        return json(response, 200, { campaigns: await store.listCampaigns() });
+      }
+      if (request.method === "POST" && url.pathname === "/api/campaigns") {
+        const input = JSON.parse(await readBody(request));
+        const campaign = createCampaign({ ...input, contentHtml: sanitizeHtml(input.contentHtml) });
+        await store.addCampaign(campaign);
+        return json(response, 201, campaign);
+      }
+      const campaignAdminPath = url.pathname.match(/^\/api\/campaigns\/([a-z0-9-]+)$/);
+      if (campaignAdminPath && request.method === "PATCH") {
+        const existing = await store.getCampaignBySlug(campaignAdminPath[1]);
+        if (!existing) return json(response, 404, { error: "Campanha não encontrada." });
+        const input = JSON.parse(await readBody(request));
+        const campaign = updateCampaign(existing, { ...input, contentHtml: sanitizeHtml(input.contentHtml) });
+        await store.replaceCampaign(existing.slug, campaign);
+        return json(response, 200, campaign);
+      }
+      if (campaignAdminPath && request.method === "DELETE") {
+        await store.deleteCampaign(campaignAdminPath[1]);
+        return json(response, 200, { ok: true });
+      }
+      if (request.method === "GET" && url.pathname === "/api/leads") {
+        return json(response, 200, { leads: await store.listLeads() });
+      }
       if (request.method === "GET" && url.pathname === "/webhook") {
         const valid = Boolean(config.verifyToken) && url.searchParams.get("hub.mode") === "subscribe" && url.searchParams.get("hub.verify_token") === config.verifyToken;
         response.writeHead(valid ? 200 : 403, { "Content-Type": "text/plain" }); return response.end(valid ? url.searchParams.get("hub.challenge") ?? "" : "Forbidden");

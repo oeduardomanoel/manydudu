@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {} };
+const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [] };
 
 export class JsonStore {
   constructor(path) { this.path = path; this.queue = Promise.resolve(); }
@@ -84,5 +84,29 @@ export class JsonStore {
     const contact = await this.getContact(id);
     return Boolean(contact?.automationPaused);
   }
+  async addCampaign(campaign) {
+    await this.update((state) => {
+      state.campaigns ??= [];
+      if (state.campaigns.some((item) => item.slug === campaign.slug)) throw new Error("Já existe uma campanha com esse slug.");
+      state.campaigns.unshift(campaign);
+    });
+    return campaign;
+  }
+  async replaceCampaign(slug, replacement) {
+    let replaced = false;
+    await this.update((state) => {
+      state.campaigns ??= [];
+      const index = state.campaigns.findIndex((item) => item.slug === slug);
+      if (index < 0) return;
+      state.campaigns[index] = replacement;
+      replaced = true;
+    });
+    return replaced;
+  }
+  async deleteCampaign(slug) { await this.update((state) => { state.campaigns = (state.campaigns ?? []).filter((item) => item.slug !== slug); }); }
+  async getCampaignBySlug(slug) { const state = await this.read(); return (state.campaigns ?? []).find((item) => item.slug === slug) ?? null; }
+  async listCampaigns() { const state = await this.read(); return state.campaigns ?? []; }
+  async addLead(lead) { await this.update((state) => { state.leads ??= []; state.leads.unshift(lead); }); return lead; }
+  async listLeads() { const state = await this.read(); return state.leads ?? []; }
   async #write(state) { const temporary = `${this.path}.tmp`; await writeFile(temporary, JSON.stringify(state, null, 2)); await rename(temporary, this.path); }
 }

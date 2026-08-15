@@ -1,7 +1,11 @@
+import { createEditor, wireToolbar } from "/editor.js";
+
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const truncate = (value = "", length = 80) => value.length > length ? `${value.slice(0, length)}…` : value;
-const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [] };
+const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [] };
+const campaignEditor = createEditor($("#campaign-editor"));
+wireToolbar($("#editor-toolbar"), campaignEditor);
 
 async function request(path, options) {
   const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
@@ -109,6 +113,52 @@ async function openContact(contactId) {
     await loadContacts();
     await openContact(contactId);
   });
+}
+
+async function loadCampaigns() {
+  const result = await request("/api/campaigns");
+  state.campaigns = result.campaigns;
+  renderCampaigns();
+}
+
+function renderCampaigns() {
+  $("#campaigns-list").innerHTML = state.campaigns.length ? state.campaigns.map((campaign) => `<article class="campaign-row">
+    <div><h3>${escapeHtml(campaign.title)} <span class="campaign-status ${campaign.active ? "active" : "inactive"}">${campaign.active ? "ATIVA" : "PAUSADA"}</span></h3>
+    <p><a href="/c/${escapeHtml(campaign.slug)}" target="_blank">manydudu.com/c/${escapeHtml(campaign.slug)}</a></p></div>
+    <div class="rule-actions"><button class="edit-rule" data-edit-campaign="${escapeHtml(campaign.slug)}">Editar</button><button class="icon-btn" data-delete-campaign="${escapeHtml(campaign.slug)}" title="Excluir">×</button></div>
+  </article>`).join("") : '<p class="empty">Nenhuma campanha ainda.<br>Crie uma para entregar conteúdo após capturar o lead.</p>';
+}
+
+function openCampaignDialog(campaign = null) {
+  const form = $("#campaign-form");
+  form.reset();
+  form.dataset.slug = campaign?.slug || "";
+  form.elements.title.value = campaign?.title || "";
+  form.elements.slug.value = campaign?.slug || "";
+  form.elements.slug.readOnly = Boolean(campaign);
+  form.elements.slug.placeholder = campaign ? "" : "gerado a partir do título";
+  form.elements.active.checked = campaign ? campaign.active : true;
+  campaignEditor.setHtml(campaign?.contentHtml || "");
+  $("#campaign-dialog-mode").textContent = campaign ? "EDITAR CAMPANHA" : "NOVA CAMPANHA";
+  $("#save-campaign").textContent = campaign ? "Salvar alterações →" : "Criar campanha →";
+  $("#campaign-form-error").textContent = "";
+  $("#campaign-dialog").showModal();
+}
+
+async function loadLeads() {
+  const result = await request("/api/leads");
+  state.leads = result.leads;
+  renderLeads();
+}
+
+function renderLeads() {
+  $("#leads-total").textContent = `${state.leads.length} ${state.leads.length === 1 ? "lead" : "leads"}`;
+  $("#leads-list").innerHTML = state.leads.length ? state.leads.map((lead) => `<article class="lead-row">
+    <strong>${escapeHtml(lead.name)}</strong>
+    <span>${escapeHtml(lead.whatsapp)} · ${escapeHtml(lead.email)} · campanha: ${escapeHtml(lead.campaignSlug)}</span>
+    <span>${escapeHtml(lead.automationInterest)}</span>
+    <div class="lead-niches">${lead.niches.map((niche) => `<span>${escapeHtml(niche === "Outro" && lead.nicheOther ? lead.nicheOther : niche)}</span>`).join("")}</div>
+  </article>`).join("") : '<p class="empty">Nenhum lead capturado ainda.</p>';
 }
 
 function renderMedia() {
@@ -303,4 +353,28 @@ $("#rules").addEventListener("click", async (event) => {
   await renderDashboard();
 });
 
-await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration()]);
+$("#new-campaign").addEventListener("click", () => openCampaignDialog());
+$("#campaigns-list").addEventListener("click", async (event) => {
+  const edit = event.target.closest("[data-edit-campaign]")?.dataset.editCampaign;
+  const remove = event.target.closest("[data-delete-campaign]")?.dataset.deleteCampaign;
+  if (edit) { const campaign = state.campaigns.find((item) => item.slug === edit); if (campaign) openCampaignDialog(campaign); return; }
+  if (remove && confirm("Excluir esta campanha? Os leads já capturados continuam salvos.")) {
+    await request(`/api/campaigns/${remove}`, { method: "DELETE" });
+    await loadCampaigns();
+  }
+});
+$("#campaign-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  $("#campaign-form-error").textContent = "";
+  const payload = { title: form.elements.title.value, slug: form.elements.slug.value || undefined, active: form.elements.active.checked, contentHtml: campaignEditor.getHtml() };
+  const slug = form.dataset.slug;
+  try {
+    await request(slug ? `/api/campaigns/${slug}` : "/api/campaigns", { method: slug ? "PATCH" : "POST", body: JSON.stringify(payload) });
+    $("#campaign-dialog").close();
+    await loadCampaigns();
+  } catch (error) { $("#campaign-form-error").textContent = error.message; }
+});
+$("#logout").addEventListener("click", async () => { await request("/api/logout", { method: "POST" }); window.location.href = "/login.html"; });
+
+await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads()]);

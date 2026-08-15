@@ -1,0 +1,42 @@
+.gate-body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:Sora,sans-serif}
+.gate-shell{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+.gate-brand-pane{display:none}
+.gate-card{width:100%;max-width:30rem;padding:34px 30px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(145deg,#0d0d0c,#090908);box-shadow:var(--shadow)}
+.gate-card h1{margin:8px 0 6px;font-size:26px;line-height:1.15;letter-spacing:-.6px}
+.gate-sub{margin:0 0 22px;color:var(--muted);font-size:13px}
+.gate-form{display:grid;gap:16px}
+.gate-form label{display:grid;gap:7px;font-size:11px;font-weight:600;color:#dce6f7}
+.gate-form input[type=text],.gate-form input[type=email],.gate-form input:not([type=checkbox]),.gate-form textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:12px;background:#12110f;color:var(--text);font-size:13px;outline:0}
+.gate-form input:focus,.gate-form textarea:focus{border-color:#ff7138;box-shadow:0 0 0 3px #ff5a1f1c}
+.gate-form textarea{min-height:82px;resize:vertical}
+.gate-niches legend{padding:0 0 8px;font-size:11px;font-weight:600;color:#dce6f7}
+.pill-group{display:flex;flex-wrap:wrap;gap:8px}
+.pill{position:relative;display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:20px;padding:8px 13px;background:#12110f;color:var(--muted);font-size:11px;cursor:pointer;transition:.16s}
+.pill input{position:absolute;opacity:0;width:1px;height:1px}
+.pill:has(input:checked){border-color:#ff71386b;background:#ff5a1f1c;color:#fff0e8}
+.pill:hover{border-color:#ff713870}
+.niche-other{margin-top:10px}
+.pill-group:has(input[value="Outro"]:checked)+.niche-other{display:block!important}
+.form-error{min-height:16px;margin:0;color:var(--danger);font-size:11px;text-align:center}
+.gate-form .wide{width:100%;margin-top:4px}
+.gate-content{margin-top:6px;color:#e8e2d9;font-size:14px;line-height:1.7}
+.gate-content h1,.gate-content h2,.gate-content h3{color:var(--text);letter-spacing:-.4px}
+.gate-content h2{font-size:20px;margin:22px 0 8px}
+.gate-content h3{font-size:16px;margin:18px 0 6px}
+.gate-content p{margin:0 0 12px}
+.gate-content a{color:#ff8a55}
+.gate-content ul,.gate-content ol{padding-left:22px;margin:0 0 12px}
+.gate-content blockquote{margin:0 0 12px;padding:10px 16px;border-left:2px solid #ff71385c;color:var(--muted)}
+.gate-instagram{display:inline-block;margin-top:26px;color:#ff8a55;font-size:12px;font-weight:700;text-decoration:none}
+.gate-instagram:hover{text-decoration:underline}
+
+@media (min-width:1024px){
+  .gate-shell{gap:64px;max-width:1180px;margin:0 auto}
+  .gate-brand-pane{display:flex;flex-direction:column;justify-content:center;flex:1;padding:20px}
+  .gate-marketing{max-width:22rem;font-size:clamp(28px,3.2vw,42px);line-height:1.12;letter-spacing:-1.4px;margin:14px 0 22px;color:var(--text)}
+  .gate-marketing em{color:#ff7138;font-style:normal;text-shadow:0 0 30px #ff5a1f45}
+  .gate-handle{color:var(--muted);font-size:13px}
+  .gate-card{flex:0 0 26rem}
+  .gate-shell--content .gate-brand-pane{display:none}
+  .gate-shell--content .gate-card--content{flex:0 0 40rem}
+}

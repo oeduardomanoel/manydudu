@@ -56,11 +56,26 @@ O cliente detecta automaticamente o fluxo pelo tipo do token. O Graph API Explor
 
 ## Estrutura
 
-- `src/domain`: regras puras de automação
+- `src/domain`: regras puras de automação e campanhas
 - `src/meta`: assinatura do webhook e cliente Graph API
 - `src/storage`: persistência JSON atômica (adequada ao MVP de uma instância)
+- `src/pages`: HTML das páginas públicas de entrega (`/c/:slug`)
 - `public`: painel administrativo
 - `test`: testes nativos do Node
+
+## Campanhas com captura de lead (`/c/:slug`)
+
+Cada campanha vira um link público `/c/slug`. Quem acessa preenche nome, WhatsApp, e-mail, nicho (múltipla escolha, com campo livre quando marca "Outro") e qual automação te interessa; só depois disso o conteúdo (texto rico colado no editor tipo Notion do painel) é liberado. O acesso fica salvo num cookie assinado por 180 dias, então a pessoa não precisa preencher de novo.
+
+Gerenciamento de campanhas e a lista de leads capturados ficam nas seções "Campanhas" e "Leads" do painel (`/`), que agora exige login.
+
+```env
+ADMIN_USER=eduardo
+ADMIN_PASSWORD=defina-uma-senha-forte
+SESSION_SECRET=gere-com-openssl-rand-hex-32
+```
+
+Sem `ADMIN_PASSWORD` e `SESSION_SECRET` configurados, o login fica bloqueado (o servidor avisa no log). As páginas `/c/:slug`, o webhook da Meta e as páginas antigas (`/visagismo`, `/dm-propria`) continuam públicas normalmente — só o painel `/` e as rotas `/api/*` (exceto `/api/login` e o POST de `/api/leads`) exigem sessão.
 
 ## Persistir automações no Supabase
 
