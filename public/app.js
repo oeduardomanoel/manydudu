@@ -310,7 +310,15 @@ $("#rule-form").elements.publicReplies.addEventListener("input", syncPublicReply
 $("#rule-form").addEventListener("input", renderJourneyPreview);
 $("#rule-form").addEventListener("change", renderJourneyPreview);
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => $(`#${button.dataset.close}`).close()));
-document.querySelectorAll("[data-scroll]").forEach((button) => button.addEventListener("click", () => $(`#${button.dataset.scroll}`).scrollIntoView({ behavior: "smooth" })));
+function switchView(view) {
+  document.querySelectorAll(".view").forEach((el) => { el.hidden = el.id !== `view-${view}`; });
+}
+document.querySelectorAll("[data-scroll]").forEach((button) => button.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach((item) => item.classList.remove("active"));
+  button.classList.add("active");
+  switchView(button.dataset.view);
+  $(`#${button.dataset.scroll}`).scrollIntoView({ behavior: "smooth" });
+}));
 document.querySelectorAll(".filter").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".filter").forEach((item) => item.classList.remove("active"));
   button.classList.add("active"); state.filter = button.dataset.filter; renderMedia();

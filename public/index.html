@@ -8,10 +8,11 @@
   <div class="grain"></div>
   <aside>
     <a class="brand" href="/"><span>MD</span> manydudu</a>
-    <nav><button class="active" data-scroll="top">◈ <span>Visão geral</span></button><button data-scroll="contents">▣ <span>Conteúdos</span></button><button data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-scroll="leads">☰ <span>Leads</span></button><button data-scroll="automations">⌁ <span>Automações</span></button><button data-scroll="activity-panel">◎ <span>Atividade</span></button></nav>
+    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button></nav>
     <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
   </aside>
   <main id="top">
+    <div id="view-dashboard" class="view">
     <header><div><p class="eyebrow">ESTÚDIO DE CONVERSAS</p><h1>Seus comentários,<br><em>em movimento.</em></h1></div><button class="primary" id="new-rule">＋ Nova automação</button></header>
     <section class="stats"><article><span>Automações ativas</span><strong id="active-count">0</strong><i>↗</i></article><article><span>Respostas enviadas</span><strong id="sent-count">0</strong><i>↗</i></article><article><span>Taxa de resposta</span><strong id="response-rate">—</strong><i>↗</i></article></section>
     <section class="media-section" id="contents">
@@ -31,18 +32,22 @@
       <div class="section-head"><div><p class="eyebrow">PESSOAS</p><h2>Contatos e histórico</h2></div><label class="contact-search">Buscar<input id="contact-search" type="search" placeholder="Nome, tag ou mensagem"></label></div>
       <div class="contacts-layout"><div id="contacts-list" class="contacts-list"><p class="empty">Os contatos aparecerão após uma interação.</p></div><div id="contact-detail" class="contact-detail"><p class="empty">Selecione uma pessoa para ver a jornada completa.</p></div></div>
     </section>
+    <section class="content-grid">
+      <div class="panel" id="automations"><div class="panel-head"><div><p class="eyebrow">FLUXOS</p><h2>Automações</h2></div><span id="rule-total">0 regras</span></div><div id="rules" class="rule-list"></div></div>
+      <div class="panel activity" id="activity-panel"><div class="panel-head"><div><p class="eyebrow">AO VIVO</p><h2>Atividade</h2></div><span class="live">● conectado</span></div><div id="activity"></div></div>
+    </section>
+    </div>
+    <div id="view-campaigns" class="view" hidden>
+    <header><div><p class="eyebrow">ENTREGA COM CAPTURA DE LEAD</p><h1>Campanhas<br><em>que capturam lead.</em></h1></div><button class="primary" id="new-campaign">＋ Nova campanha</button></header>
     <section class="media-section" id="campaigns">
-      <div class="section-head"><div><p class="eyebrow">ENTREGA COM CAPTURA DE LEAD</p><h2>Campanhas</h2></div><button class="primary" id="new-campaign">＋ Nova campanha</button></div>
+      <div class="section-head"><div><p class="eyebrow">LINKS PÚBLICOS</p><h2>Suas campanhas</h2></div></div>
       <div id="campaigns-list" class="rule-list"></div>
     </section>
     <section class="contacts-section" id="leads">
       <div class="section-head"><div><p class="eyebrow">CAPTURADOS PELAS CAMPANHAS</p><h2>Leads</h2></div><span id="leads-total">0 leads</span></div>
       <div id="leads-list" class="rule-list"></div>
     </section>
-    <section class="content-grid">
-      <div class="panel" id="automations"><div class="panel-head"><div><p class="eyebrow">FLUXOS</p><h2>Automações</h2></div><span id="rule-total">0 regras</span></div><div id="rules" class="rule-list"></div></div>
-      <div class="panel activity" id="activity-panel"><div class="panel-head"><div><p class="eyebrow">AO VIVO</p><h2>Atividade</h2></div><span class="live">● conectado</span></div><div id="activity"></div></div>
-    </section>
+    </div>
   </main>
   <dialog id="rule-dialog"><form id="rule-form"><div class="dialog-head"><div><p class="eyebrow" id="rule-dialog-mode">NOVA AUTOMAÇÃO</p><h2 id="rule-dialog-title">Quando alguém comentar...</h2></div><button type="button" class="close" data-close="rule-dialog">×</button></div>
     <div class="scope-card" id="rule-scope"><span class="scope-icon">◎</span><div><small>APLICAR EM</small><strong>Todos os conteúdos</strong></div><button type="button" id="clear-scope">Usar global</button></div>
