@@ -15,6 +15,7 @@ import { deliverStageChange, isBlockedTarget } from "./domain/outbound-webhook.j
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
+import { safeFilename } from "./util/filename.js";
 import { renderContentPage, renderGatePage, renderNotFound } from "./pages/gate.js";
 import { renderSetupPage } from "./pages/setup.js";
 import { upsertEnvFile } from "./util/env-file.js";
@@ -316,7 +317,7 @@ export function createApp({ store, meta, config, serveStatic }) {
         const campaignSlug = url.searchParams.get("campaignSlug");
         const campaign = campaignSlug ? await store.getCampaignBySlug(campaignSlug) : null;
         const pkg = exportPackage(rule, campaign);
-        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${rule.keyword || "automacao"}.json"` });
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${safeFilename(rule.keyword, "automacao")}.json"` });
         return response.end(JSON.stringify(pkg, null, 2));
       }
       if (request.method === "GET" && url.pathname === "/api/settings") {
