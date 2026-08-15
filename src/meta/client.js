@@ -12,9 +12,15 @@ export class MetaClient {
     this.pacer = new MetaRequestPacer({ minIntervalMs: minWriteIntervalMs, now, sleep });
   }
 
+  setAccessToken(accessToken) {
+    this.accessToken = accessToken;
+    const host = accessToken?.startsWith("IG") ? "graph.instagram.com" : "graph.facebook.com";
+    this.baseUrl = this.baseUrl.replace(/^https:\/\/[^/]+/, `https://${host}`);
+  }
+
   async reply(commentId, message, mode) {
     if (!this.accessToken) throw new Error("META_ACCESS_TOKEN não configurado.");
-    const target = mode === "private" ? this.messagesPath : `${commentId}/replies`;
+    const target = mode === "private" ? this.messagesPath : `${encodeURIComponent(commentId)}/replies`;
     const privateMessage = { text: message };
     const payload = mode === "private"
       ? { recipient: { comment_id: commentId }, message: privateMessage }
