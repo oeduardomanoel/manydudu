@@ -52,6 +52,24 @@ test("validateBackup rejects a wrong-typed field instead of silently coercing it
   assert.throws(() => validateBackup(JSON.stringify({ format: "manydudu-backup", state: { contacts: [] } })), AppError);
 });
 
+test("validateBackup sanitizes contentHtml on restored campaigns", () => {
+  const sanitized = validateBackup(JSON.stringify({
+    format: "manydudu-backup",
+    state: { campaigns: [{ id: "c1", slug: "guia", contentHtml: '<img src=x onerror="alert(1)"><script>alert(2)</script>Oi' }] },
+  }));
+  assert.equal(sanitized.campaigns[0].contentHtml.includes("onerror"), false);
+  assert.equal(sanitized.campaigns[0].contentHtml.includes("<script"), false);
+  assert.equal(sanitized.campaigns[0].contentHtml.includes("Oi"), true);
+});
+
+test("validateBackup caps an oversized contentHtml on restored campaigns", () => {
+  const sanitized = validateBackup(JSON.stringify({
+    format: "manydudu-backup",
+    state: { campaigns: [{ id: "c1", slug: "guia", contentHtml: "a".repeat(60_000) }] },
+  }));
+  assert.equal(sanitized.campaigns[0].contentHtml.length <= 50_000, true);
+});
+
 test("applyBackup replaces the state but preserves the live metaToken, ignoring any in the file", () => {
   const state = { ...structuredClone(fullState) };
   const sanitized = { rules: [{ id: "new", keyword: "novo" }], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [] };

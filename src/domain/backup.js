@@ -1,10 +1,17 @@
 import { AppError } from "../util/errors.js";
+import { sanitizeHtml } from "../util/html.js";
 
 const FORMAT = "manydudu-backup";
 const VERSION = 1;
 const ARRAY_KEYS = ["rules", "activity", "campaigns", "leads"];
 const OBJECT_KEYS = ["events", "pendingDeliveries", "contacts"];
 const ALLOWED_KEYS = [...ARRAY_KEYS, ...OBJECT_KEYS];
+const MAX_CONTENT_HTML_LENGTH = 50_000;
+
+function sanitizeCampaignItem(item) {
+  if (!("contentHtml" in item)) return item;
+  return { ...item, contentHtml: sanitizeHtml(String(item.contentHtml ?? "").slice(0, MAX_CONTENT_HTML_LENGTH)) };
+}
 
 export function exportState(state) {
   const data = {};
@@ -29,7 +36,8 @@ export function validateBackup(raw) {
   for (const key of ARRAY_KEYS) {
     const value = source[key];
     if (value !== undefined && !Array.isArray(value)) throw new AppError(`Campo "${key}" inválido no backup.`);
-    sanitized[key] = Array.isArray(value) ? value.filter((item) => item && typeof item === "object" && typeof item.id === "string") : [];
+    const items = Array.isArray(value) ? value.filter((item) => item && typeof item === "object" && typeof item.id === "string") : [];
+    sanitized[key] = key === "campaigns" ? items.map(sanitizeCampaignItem) : items;
   }
   for (const key of OBJECT_KEYS) {
     const value = source[key];
