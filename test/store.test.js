@@ -14,6 +14,18 @@ test("deduplicates event ids", async (t) => {
   assert.equal(await store.claimEvent("comment-1"), false);
 });
 
+test("caps activity at 500 entries, keeping the most recent", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "manydudu-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const store = new JsonStore(join(directory, "db.json"));
+  await store.initialize();
+  for (let i = 0; i < 501; i++) await store.log({ id: `event-${i}`, status: "ignored", at: new Date(i).toISOString() });
+  const state = await store.read();
+  assert.equal(state.activity.length, 500);
+  assert.equal(state.activity[0].id, "event-500");
+  assert.equal(state.activity.some((item) => item.id === "event-0"), false);
+});
+
 test("consumes a pending delivery only once", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "manydudu-"));
   t.after(() => rm(directory, { recursive: true, force: true }));

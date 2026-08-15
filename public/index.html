@@ -8,7 +8,7 @@
   <div class="grain"></div>
   <aside>
     <a class="brand" href="/"><span>MD</span> manydudu</a>
-    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button></nav>
+    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button><button data-view="health" data-scroll="health">♡ <span>Saúde</span></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button></nav>
     <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
   </aside>
   <main id="top">
@@ -63,6 +63,38 @@
       <div class="section-head"><div><p class="eyebrow">ORIGEM E BUSCA</p><h2>Filtrar por onde a pessoa chegou</h2></div><input id="pipeline-search" type="search" placeholder="Buscar por nome..."></div>
       <div id="pipeline-filters" class="pipeline-filters"></div>
       <div id="pipeline-board" class="pipeline-board"></div>
+    </section>
+    </div>
+    <div id="view-health" class="view" hidden>
+    <header><div><p class="eyebrow">SEM PRECISAR DE SSH</p><h1>Saúde<br><em>da sua instalação.</em></h1></div><button type="button" class="icon-btn" id="health-refresh" title="Atualizar">↻</button></header>
+    <section class="stats" id="health">
+      <article><span>Token do Instagram</span><strong id="health-token">—</strong><i id="health-token-dot">●</i></article>
+      <article><span>Webhook</span><strong id="health-webhook">—</strong><i id="health-webhook-dot">●</i></article>
+      <article><span>Uso da API da Meta</span><strong id="health-usage">—</strong><i id="health-usage-dot">●</i></article>
+      <article><span>Banco de dados</span><strong id="health-store">—</strong><i id="health-store-dot">●</i></article>
+    </section>
+    <section class="media-section" id="backup-section">
+      <div class="section-head"><div><p class="eyebrow">SEM DEPENDER DE NINGUÉM</p><h2>Backup e restauração</h2></div></div>
+      <p class="hint">Baixe tudo (automações, contatos, campanhas, leads) num arquivo. Guarde num lugar seguro — é sua garantia se precisar reinstalar do zero ou trocar de servidor.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="primary compact" id="backup-download" href="/api/backup">⇩ Baixar backup</a>
+        <button type="button" class="icon-btn" id="backup-restore-btn">⇧ Restaurar de um arquivo</button>
+        <input type="file" id="backup-restore-input" accept="application/json" hidden>
+      </div>
+    </section>
+    </div>
+    <div id="view-audit" class="view" hidden>
+    <header><div><p class="eyebrow">TUDO QUE ACONTECEU</p><h1>Auditoria<br><em>sem precisar de SSH.</em></h1></div></header>
+    <section class="media-section" id="audit-section">
+      <div class="section-head"><div><p class="eyebrow">FILTRAR</p><h2>Eventos recentes</h2></div><div class="filters">
+        <select id="audit-status-filter"><option value="">Todos os status</option><option value="sent">Enviado</option><option value="ignored">Ignorado</option><option value="failed">Falhou</option><option value="delivered">Entregue</option><option value="waiting_follow">Aguardando seguir</option><option value="public_failed">Resposta pública falhou</option></select>
+        <button type="button" class="icon-btn refresh" id="audit-refresh" title="Atualizar">↻</button>
+      </div></div>
+      <div id="audit-list"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+        <span id="audit-total" style="color:var(--muted);font-size:11px"></span>
+        <div style="display:flex;gap:8px"><button type="button" class="icon-btn" id="audit-prev">← Anterior</button><button type="button" class="icon-btn" id="audit-next">Próximo →</button></div>
+      </div>
     </section>
     </div>
   </main>

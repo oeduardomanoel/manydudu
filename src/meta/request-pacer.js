@@ -5,6 +5,15 @@ export class MetaRequestPacer {
     this.sleep = sleep;
     this.queue = Promise.resolve();
     this.nextAllowedAt = 0;
+    this.lastUsage = null;
+  }
+
+  recordUsage(value) {
+    this.lastUsage = { value: Number(value) || 0, at: this.now() };
+  }
+
+  getUsage() {
+    return this.lastUsage;
   }
 
   run(operation) {

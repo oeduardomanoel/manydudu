@@ -99,9 +99,15 @@ export class MetaClient {
 
   #applyUsageCooldown(response) {
     const usage = readUsage(response);
+    this.pacer.recordUsage(usage);
     if (usage >= 95) this.pacer.cooldown(60_000);
     else if (usage >= 90) this.pacer.cooldown(30_000);
     else if (usage >= 80) this.pacer.cooldown(5_000);
+  }
+
+  getUsageSnapshot() {
+    const usage = this.pacer.getUsage();
+    return { usage: usage?.value ?? null, usageAt: usage?.at ?? null, nextAllowedAt: this.pacer.nextAllowedAt, cooldownActive: this.pacer.nextAllowedAt > Date.now() };
   }
 }
 

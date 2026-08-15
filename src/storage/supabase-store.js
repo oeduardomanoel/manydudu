@@ -6,6 +6,7 @@ const EMPTY_STATE = { rules: [], events: {}, activity: [], pendingDeliveries: {}
 function normalizeUrl(url) { return String(url).replace(/\/$/, ""); }
 
 export class SupabaseStore extends JsonStore {
+  get backend() { return "supabase"; }
   constructor({ url, serviceRoleKey, stateId = "default", seedPath, fetchImpl = fetch }) {
     super(seedPath ?? "data/db.json");
     this.url = normalizeUrl(url);

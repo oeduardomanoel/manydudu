@@ -33,3 +33,8 @@ dialog{width:min(560px,calc(100% - 28px));max-height:calc(100vh - 30px);overflow
 .pipeline-detail-history{max-height:170px;margin:0 0 16px;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:12px}
 .onboarding-card{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1420px;margin:0 auto 22px;padding:22px 26px;border:1px solid var(--strong);border-radius:var(--radius);background:linear-gradient(120deg,#2663d826,#0a111db3);box-shadow:var(--shadow)}.onboarding-card h2{margin:6px 0 8px;font-size:18px}.onboarding-card p{margin:0;max-width:60ch;color:var(--muted);font-size:12px;line-height:1.6}.onboarding-card .primary.compact{flex:none}
 @media(max-width:760px){.onboarding-card{flex-direction:column;align-items:flex-start}}
+.media-section .hint{margin:-6px 0 16px;color:var(--muted);font-size:11px;line-height:1.5;max-width:70ch}
+#health .dot-ok{color:var(--green)!important;text-shadow:0 0 12px #3de0a266}
+#health .dot-warn{color:var(--yellow)!important;text-shadow:0 0 12px #ffc85766}
+#health .dot-critical{color:var(--danger)!important;text-shadow:0 0 12px #ff668066}
+#audit-list .event details{margin-top:6px}#audit-list .event summary{cursor:pointer;color:var(--cyan);font-size:9px}#audit-list .event pre{margin:6px 0 0;padding:8px;background:#050a13;border-radius:6px;font-size:9px;line-height:1.5;overflow-x:auto;color:var(--muted)}

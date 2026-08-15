@@ -4,11 +4,13 @@ import { AppError } from "../util/errors.js";
 import { PIPELINE_STAGES } from "../domain/pipeline.js";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const ACTIVITY_LIMIT = 500;
 
 const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [], metaToken: null };
 
 export class JsonStore {
   constructor(path) { this.path = path; this.queue = Promise.resolve(); }
+  get backend() { return "local-json"; }
   async initialize() {
     await mkdir(dirname(this.path), { recursive: true });
     try { await readFile(this.path); } catch (error) {
@@ -36,7 +38,7 @@ export class JsonStore {
   }
   async deleteRule(id) { await this.update((state) => { state.rules = state.rules.filter((rule) => rule.id !== id); }); }
   async toggleRule(id) { await this.update((state) => { const rule = state.rules.find((item) => item.id === id); if (rule) rule.enabled = !rule.enabled; }); }
-  async log(item) { await this.update((state) => { state.activity.unshift(item); state.activity = state.activity.slice(0, 100); }); }
+  async log(item) { await this.update((state) => { state.activity.unshift(item); state.activity = state.activity.slice(0, ACTIVITY_LIMIT); }); }
   async setPendingDelivery(recipientId, delivery) {
     await this.update((state) => { state.pendingDeliveries ??= {}; state.pendingDeliveries[recipientId] = delivery; });
   }

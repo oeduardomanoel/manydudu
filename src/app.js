@@ -5,6 +5,8 @@ import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
 import { exportPackage, parsePackage } from "./domain/automation-package.js";
 import { applyBackup, exportState, validateBackup } from "./domain/backup.js";
+import { buildHealthReport } from "./domain/health.js";
+import { paginateActivity } from "./domain/activity.js";
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
@@ -291,6 +293,28 @@ export function createApp({ store, meta, config, serveStatic }) {
         const pkg = exportPackage(rule, campaign);
         response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${rule.keyword || "automacao"}.json"` });
         return response.end(JSON.stringify(pkg, null, 2));
+      }
+      if (request.method === "GET" && url.pathname === "/api/activity") {
+        const state = await store.read();
+        const page = paginateActivity(state.activity, {
+          limit: url.searchParams.get("limit"), offset: url.searchParams.get("offset"),
+          status: url.searchParams.get("status") || undefined, ruleId: url.searchParams.get("ruleId") || undefined,
+        });
+        return json(response, 200, page);
+      }
+      if (request.method === "GET" && url.pathname === "/api/health") {
+        const started = Date.now();
+        let storeStatus; let metaToken = null; let lastEventAt = null;
+        try {
+          const state = await store.read();
+          storeStatus = { ok: true, backend: store.backend, latencyMs: Date.now() - started };
+          metaToken = state.metaToken ?? null;
+          lastEventAt = state.activity?.[0]?.at ?? null;
+        } catch (error) {
+          storeStatus = { ok: false, backend: store.backend, error: error.message };
+        }
+        const report = buildHealthReport({ metaToken, usage: meta.getUsageSnapshot(), webhookConfigured: config.configured, lastEventAt, storeStatus });
+        return json(response, 200, report);
       }
       if (request.method === "GET" && url.pathname === "/api/backup") {
         const backup = exportState(await store.read());

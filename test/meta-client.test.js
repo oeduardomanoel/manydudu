@@ -144,3 +144,18 @@ test("waits for Meta retry-after and retries a throttled write", async () => {
   assert.equal(attempts, 2);
   assert.deepEqual(waits, [2000]);
 });
+
+test("getUsageSnapshot reflects the x-app-usage header from the last write", async () => {
+  const fetcher = async () => ({
+    ok: true, status: 200,
+    headers: { get: (name) => name.toLowerCase() === "x-app-usage" ? JSON.stringify({ call_count: 72 }) : null },
+    json: async () => ({ id: "reply-3" }),
+  });
+  const client = new MetaClient({ accessToken: "IG-test", instagramAccountId: "ig-1", fetcher });
+
+  assert.equal(client.getUsageSnapshot().usage, null);
+  await client.reply("comment-1", "Olá", "public");
+  const snapshot = client.getUsageSnapshot();
+  assert.equal(snapshot.usage, 72);
+  assert.equal(typeof snapshot.usageAt, "number");
+});

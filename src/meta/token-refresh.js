@@ -1,4 +1,4 @@
-const REFRESH_THRESHOLD_DAYS = 10;
+export const REFRESH_THRESHOLD_DAYS = 10;
 
 export function isInstagramLoginToken(token) {
   return Boolean(token) && token.startsWith("IG");

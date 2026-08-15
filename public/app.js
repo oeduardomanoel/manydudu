@@ -252,6 +252,69 @@ function renderPipeline() {
   renderPipelineBoard(pipelineItemsCache);
 }
 
+const HEALTH_LABELS = { ok: "Tudo certo", warn: "Atenção", critical: "Crítico" };
+
+function setHealthField(prefix, label, statusKey) {
+  $(`#health-${prefix}`).textContent = label;
+  const dot = $(`#health-${prefix}-dot`);
+  dot.className = `dot-${statusKey}`;
+  dot.title = HEALTH_LABELS[statusKey] || statusKey;
+}
+
+async function loadHealth() {
+  try {
+    const report = await request("/api/health");
+    setHealthField("token", report.token.daysLeft != null ? `${report.token.daysLeft} dias restantes` : report.token.configured ? "Validade desconhecida" : "Não configurado", report.token.status);
+    setHealthField("webhook", report.webhook.configured ? "Configurado" : "Faltando credenciais", report.webhook.status);
+    setHealthField("usage", report.apiUsage.percent != null ? `${report.apiUsage.percent}% de uso` : "Sem dados ainda", report.apiUsage.status);
+    setHealthField("store", report.store.ok ? `${report.store.backend === "supabase" ? "Supabase" : "Arquivo local"} · ${report.store.latencyMs}ms` : `Erro: ${report.store.error}`, report.store.status);
+  } catch (error) {
+    ["token", "webhook", "usage", "store"].forEach((prefix) => setHealthField(prefix, "Erro ao carregar", "critical"));
+  }
+}
+
+$("#health-refresh").addEventListener("click", loadHealth);
+$("#backup-restore-btn").addEventListener("click", () => $("#backup-restore-input").click());
+$("#backup-restore-input").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!confirm("Isso substitui TODOS os dados atuais (automações, contatos, campanhas, leads) pelo conteúdo do arquivo. Continuar?")) return;
+  try {
+    const text = await file.text();
+    await request("/api/backup/restore", { method: "POST", body: text });
+    alert("Restaurado com sucesso. A página vai recarregar.");
+    window.location.reload();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+let auditOffset = 0;
+const AUDIT_PAGE_SIZE = 30;
+
+async function loadAudit() {
+  const status = $("#audit-status-filter").value;
+  const params = new URLSearchParams({ limit: AUDIT_PAGE_SIZE, offset: auditOffset });
+  if (status) params.set("status", status);
+  const page = await request(`/api/activity?${params}`);
+  $("#audit-total").textContent = `${page.total} eventos no total`;
+  $("#audit-prev").disabled = auditOffset === 0;
+  $("#audit-next").disabled = auditOffset + AUDIT_PAGE_SIZE >= page.total;
+  $("#audit-list").innerHTML = page.items.length ? page.items.map((event) => `<article class="event ${escapeHtml(event.status || "")}">
+    <span class="dot"></span>
+    <div><strong>${escapeHtml(event.status || "—")}${event.reason ? ` · ${escapeHtml(event.reason)}` : ""}</strong>
+    <p>${escapeHtml(truncate(event.text || event.rule || "", 90))}</p>
+    <time>${event.at ? new Date(event.at).toLocaleString("pt-BR") : ""}</time>
+    <details><summary>Ver evento bruto</summary><pre>${escapeHtml(JSON.stringify(event, null, 2))}</pre></details></div>
+  </article>`).join("") : '<p class="empty">Nenhum evento nesse filtro.</p>';
+}
+
+$("#audit-refresh").addEventListener("click", () => { auditOffset = 0; loadAudit(); });
+$("#audit-status-filter").addEventListener("change", () => { auditOffset = 0; loadAudit(); });
+$("#audit-prev").addEventListener("click", () => { auditOffset = Math.max(0, auditOffset - AUDIT_PAGE_SIZE); loadAudit(); });
+$("#audit-next").addEventListener("click", () => { auditOffset += AUDIT_PAGE_SIZE; loadAudit(); });
+
 function openPipelineDetail(key) {
   const item = pipelineItemsCache.find((entry) => entry.key === key);
   if (!item) return;
@@ -586,5 +649,5 @@ $("#pipeline-board").addEventListener("drop", async (event) => {
   } catch (error) { alert(error.message); }
 });
 
-await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads()]);
+await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit()]);
 renderPipeline();
