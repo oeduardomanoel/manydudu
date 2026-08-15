@@ -89,6 +89,24 @@ test("pauses and resumes automations for one contact", async (t) => {
   assert.equal(await store.isContactPaused("ig-9"), false);
 });
 
+test("does not pollute Object.prototype via a __proto__ contact id", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "manydudu-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const store = new JsonStore(join(directory, "db.json"));
+  await store.initialize();
+
+  assert.equal(await store.getContact("__proto__"), null);
+  await store.updateContact("__proto__", { tags: ["polluted"] });
+  await store.setContactPaused("__proto__", true);
+  await store.recordContactEvent({ contactId: "__proto__", username: "x", type: "message", text: "oi", at: "2026-08-01T00:00:00.000Z" });
+  await store.consumePendingDelivery("__proto__");
+  await store.getPendingDelivery("__proto__");
+
+  assert.equal(Object.prototype.tags, undefined);
+  assert.equal(Object.prototype.automationPaused, undefined);
+  assert.equal(({}).automationPaused, undefined);
+});
+
 test("replaces an existing rule and reports a missing id", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "manydudu-"));
   t.after(() => rm(directory, { recursive: true, force: true }));

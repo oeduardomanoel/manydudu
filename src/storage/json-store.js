@@ -5,6 +5,7 @@ import { PIPELINE_STAGES } from "../domain/pipeline.js";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ACTIVITY_LIMIT = 500;
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 
 const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [], metaToken: null, settings: {} };
 
@@ -44,17 +45,23 @@ export class JsonStore {
   }
   async getPendingDelivery(recipientId) {
     const state = await this.read();
-    return state.pendingDeliveries?.[recipientId] ?? null;
+    return hasOwn(state.pendingDeliveries, recipientId) ? state.pendingDeliveries[recipientId] : null;
   }
   async consumePendingDelivery(recipientId) {
     let delivery = null;
-    await this.update((state) => { state.pendingDeliveries ??= {}; delivery = state.pendingDeliveries[recipientId] ?? null; delete state.pendingDeliveries[recipientId]; });
+    await this.update((state) => {
+      state.pendingDeliveries ??= {};
+      delivery = hasOwn(state.pendingDeliveries, recipientId) ? state.pendingDeliveries[recipientId] : null;
+      delete state.pendingDeliveries[recipientId];
+    });
     return delivery;
   }
   async recordContactEvent(event) {
     await this.update((state) => {
       state.contacts ??= {};
-      const current = state.contacts[event.contactId] ?? { id: event.contactId, tags: [], notes: [], history: [] };
+      const current = hasOwn(state.contacts, event.contactId)
+        ? state.contacts[event.contactId]
+        : { id: event.contactId, tags: [], notes: [], history: [] };
       current.username = event.username || current.username || "instagram";
       current.lastInteractionAt = event.at;
       current.history.unshift(event);
@@ -69,13 +76,13 @@ export class JsonStore {
   }
   async getContact(id) {
     const state = await this.read();
-    return state.contacts?.[id] ?? null;
+    return hasOwn(state.contacts, id) ? state.contacts[id] : null;
   }
   async updateContact(id, changes) {
     let updated = null;
     await this.update((state) => {
-      const contact = state.contacts?.[id];
-      if (!contact) return;
+      if (!hasOwn(state.contacts, id)) return;
+      const contact = state.contacts[id];
       if (Array.isArray(changes.tags)) contact.tags = [...new Set(changes.tags.map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 10);
       if (typeof changes.follower === "boolean") { contact.follower = changes.follower; contact.followerCheckedAt = new Date().toISOString(); }
       if (String(changes.note ?? "").trim()) contact.notes.unshift({ text: String(changes.note).trim().slice(0, 500), at: new Date().toISOString() });
@@ -87,7 +94,7 @@ export class JsonStore {
     return updated;
   }
   async setContactPaused(id, paused) {
-    await this.update((state) => { if (state.contacts?.[id]) state.contacts[id].automationPaused = Boolean(paused); });
+    await this.update((state) => { if (hasOwn(state.contacts, id)) state.contacts[id].automationPaused = Boolean(paused); });
   }
   async isContactPaused(id) {
     const contact = await this.getContact(id);
