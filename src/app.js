@@ -3,6 +3,7 @@ import { buildAnalytics } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature } from "./meta/webhook.js";
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
 import { exportPackage, parsePackage } from "./domain/automation-package.js";
+import { applyBackup, exportState, validateBackup } from "./domain/backup.js";
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
@@ -225,6 +226,16 @@ export function createApp({ store, meta, config, serveStatic }) {
         const pkg = exportPackage(rule, campaign);
         response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${rule.keyword || "automacao"}.json"` });
         return response.end(JSON.stringify(pkg, null, 2));
+      }
+      if (request.method === "GET" && url.pathname === "/api/backup") {
+        const backup = exportState(await store.read());
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="manydudu-backup-${new Date().toISOString().slice(0, 10)}.json"` });
+        return response.end(JSON.stringify(backup, null, 2));
+      }
+      if (request.method === "POST" && url.pathname === "/api/backup/restore") {
+        const sanitized = validateBackup((await readBody(request, 5_000_000)).toString("utf8"));
+        await store.update((state) => applyBackup(state, sanitized));
+        return json(response, 200, { ok: true });
       }
       if (request.method === "POST" && url.pathname === "/api/automation-packages/import") {
         const { rule: ruleData, campaign: campaignData } = parsePackage((await readBody(request)).toString("utf8"));
