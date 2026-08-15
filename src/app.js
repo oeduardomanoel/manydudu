@@ -10,6 +10,8 @@ import { paginateActivity } from "./domain/activity.js";
 import { isFatigued } from "./domain/fatigue.js";
 import { scoreContact, scoreLead } from "./domain/lead-score.js";
 import { buildContentRoi } from "./domain/roi.js";
+import { validateSettings } from "./domain/settings.js";
+import { deliverStageChange, isBlockedTarget } from "./domain/outbound-webhook.js";
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
@@ -32,6 +34,15 @@ function applySecurityHeaders(request, response) {
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   response.setHeader("Content-Security-Policy", CSP);
   if (isSecureRequest(request)) response.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+}
+
+async function maybeNotifyStageChange(store, kind, id, label, previousStage, record) {
+  if (!record || previousStage === record.stage) return;
+  const settings = await store.getSettings();
+  if (!settings.outboundWebhookUrl) return;
+  const payload = { event: "pipeline.stage_changed", kind, id, label, previousStage: previousStage ?? null, stage: record.stage, at: new Date().toISOString(), source: "manydudu" };
+  try { await deliverStageChange({ url: settings.outboundWebhookUrl, payload }); }
+  catch (error) { console.error(`Falha ao entregar webhook de saída: ${error.message}`); }
 }
 
 function requiresAuth(pathname, method) {
@@ -188,7 +199,9 @@ export function createApp({ store, meta, config, serveStatic }) {
       if (leadAdminPath && request.method === "PATCH") {
         const changes = JSON.parse(await readBody(request));
         if (changes.stage !== undefined && !PIPELINE_STAGES.includes(changes.stage)) return json(response, 400, { error: "Estágio inválido." });
+        const previousLead = (await store.listLeads()).find((item) => item.id === leadAdminPath[1]);
         const lead = await store.updateLead(leadAdminPath[1], changes);
+        if (lead) void maybeNotifyStageChange(store, "lead", lead.id, lead.name, previousLead?.stage, lead);
         return lead ? json(response, 200, lead) : json(response, 404, { error: "Lead não encontrado." });
       }
       if (request.method === "GET" && url.pathname === "/webhook") {
@@ -248,7 +261,12 @@ export function createApp({ store, meta, config, serveStatic }) {
       if (request.method === "PATCH" && contactPath) {
         const changes = JSON.parse(await readBody(request));
         if (changes.stage !== undefined && !PIPELINE_STAGES.includes(changes.stage)) return json(response, 400, { error: "Estágio inválido." });
+        const previousContact = await store.getContact(contactPath[1]);
         const contact = await store.updateContact(contactPath[1], changes);
+        if (contact) {
+          const label = contact.username && contact.username !== "instagram" ? `@${contact.username}` : contact.id;
+          void maybeNotifyStageChange(store, "contact", contact.id, label, previousContact?.stage, contact);
+        }
         return contact ? json(response, 200, contact) : json(response, 404, { error: "Contato não encontrado." });
       }
       const contactActionPath = url.pathname.match(/^\/api\/contacts\/([^/]+)\/(messages|pause)$/);
@@ -298,6 +316,26 @@ export function createApp({ store, meta, config, serveStatic }) {
         const pkg = exportPackage(rule, campaign);
         response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${rule.keyword || "automacao"}.json"` });
         return response.end(JSON.stringify(pkg, null, 2));
+      }
+      if (request.method === "GET" && url.pathname === "/api/settings") {
+        return json(response, 200, await store.getSettings());
+      }
+      if (request.method === "PATCH" && url.pathname === "/api/settings") {
+        const validated = validateSettings(JSON.parse(await readBody(request)));
+        if (validated.outboundWebhookUrl && await isBlockedTarget(new URL(validated.outboundWebhookUrl).hostname)) {
+          throw new AppError("Esse endereço é bloqueado (aponta pra um endereço de metadados de nuvem).");
+        }
+        return json(response, 200, await store.setSettings(validated));
+      }
+      if (request.method === "POST" && url.pathname === "/api/settings/test-webhook") {
+        const settings = await store.getSettings();
+        if (!settings.outboundWebhookUrl) return json(response, 400, { error: "Configure a URL do webhook primeiro." });
+        try {
+          await deliverStageChange({ url: settings.outboundWebhookUrl, payload: { event: "manydudu.test", message: "Teste de conexão do ManyDudu", at: new Date().toISOString(), source: "manydudu" } });
+          return json(response, 200, { ok: true });
+        } catch (error) {
+          return json(response, 400, { error: error.message });
+        }
       }
       if (request.method === "GET" && url.pathname === "/api/content-roi") {
         const contacts = await store.listContacts();

@@ -286,6 +286,39 @@ async function loadHealth() {
   }
 }
 
+async function loadWebhookSettings() {
+  const settings = await request("/api/settings");
+  $("#webhook-form").elements.outboundWebhookUrl.value = settings.outboundWebhookUrl || "";
+}
+
+$("#webhook-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = $("#webhook-status");
+  status.textContent = "";
+  const url = event.currentTarget.elements.outboundWebhookUrl.value.trim();
+  try {
+    await request("/api/settings", { method: "PATCH", body: JSON.stringify({ outboundWebhookUrl: url }) });
+    status.style.color = "var(--green)";
+    status.textContent = "Salvo ✓";
+  } catch (error) {
+    status.style.color = "var(--danger)";
+    status.textContent = error.message;
+  }
+});
+$("#webhook-test").addEventListener("click", async () => {
+  const status = $("#webhook-status");
+  status.textContent = "Enviando...";
+  status.style.color = "var(--muted)";
+  try {
+    await request("/api/settings/test-webhook", { method: "POST" });
+    status.style.color = "var(--green)";
+    status.textContent = "Recebido ✓";
+  } catch (error) {
+    status.style.color = "var(--danger)";
+    status.textContent = error.message;
+  }
+});
+
 $("#health-refresh").addEventListener("click", loadHealth);
 $("#backup-restore-btn").addEventListener("click", () => $("#backup-restore-input").click());
 $("#backup-restore-input").addEventListener("change", async (event) => {
@@ -662,5 +695,5 @@ $("#pipeline-board").addEventListener("drop", async (event) => {
   } catch (error) { alert(error.message); }
 });
 
-await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit(), loadContentRoi()]);
+await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit(), loadContentRoi(), loadWebhookSettings()]);
 renderPipeline();

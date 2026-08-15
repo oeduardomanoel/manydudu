@@ -84,6 +84,16 @@
         <input type="file" id="backup-restore-input" accept="application/json" hidden>
       </div>
     </section>
+    <section class="media-section" id="webhook-section">
+      <div class="section-head"><div><p class="eyebrow">INTEGRAÇÃO EXTERNA</p><h2>Webhook de saída</h2></div></div>
+      <p class="hint">Dispara um POST pra essa URL sempre que um lead ou contato muda de estágio no Pipeline — conecte com Zapier, n8n ou outra automação sua. Deixe em branco pra desativar.</p>
+      <form id="webhook-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <label style="flex:1;min-width:240px;margin:0"><span style="display:block;margin-bottom:6px;font-size:11px;color:var(--muted)">URL (https://)</span><input name="outboundWebhookUrl" type="url" placeholder="https://n8n.seudominio.com/webhook/..." style="width:100%"></label>
+        <button class="primary compact" type="submit">Salvar</button>
+        <button type="button" class="icon-btn" id="webhook-test">Testar envio</button>
+      </form>
+      <p class="form-error" id="webhook-status" role="alert" style="text-align:left;margin-top:8px"></p>
+    </section>
     </div>
     <div id="view-audit" class="view" hidden>
     <header><div><p class="eyebrow">TUDO QUE ACONTECEU</p><h1>Auditoria<br><em>sem precisar de SSH.</em></h1></div></header>

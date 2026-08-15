@@ -6,7 +6,7 @@ import { PIPELINE_STAGES } from "../domain/pipeline.js";
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ACTIVITY_LIMIT = 500;
 
-const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [], metaToken: null };
+const EMPTY = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [], metaToken: null, settings: {} };
 
 export class JsonStore {
   constructor(path) { this.path = path; this.queue = Promise.resolve(); }
@@ -132,5 +132,7 @@ export class JsonStore {
   }
   async getMetaToken() { const state = await this.read(); return state.metaToken ?? null; }
   async setMetaToken(token) { await this.update((state) => { state.metaToken = token; }); }
+  async getSettings() { const state = await this.read(); return state.settings ?? {}; }
+  async setSettings(updates) { await this.update((state) => { state.settings = { ...(state.settings ?? {}), ...updates }; }); return this.getSettings(); }
   async #write(state) { const temporary = `${this.path}.tmp`; await writeFile(temporary, JSON.stringify(state, null, 2)); await rename(temporary, this.path); }
 }

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { JsonStore } from "./json-store.js";
 
-const EMPTY_STATE = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [], metaToken: null };
+const EMPTY_STATE = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [], metaToken: null, settings: {} };
 
 function normalizeUrl(url) { return String(url).replace(/\/$/, ""); }
 
