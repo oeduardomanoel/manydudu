@@ -6,6 +6,10 @@ const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => (
 const truncate = (value = "", length = 80) => value.length > length ? `${value.slice(0, length)}…` : value;
 const contactLabel = (contact) => contact.username ? `@${contact.username}` : `Perfil sem nome · ${contact.id.slice(-6)}`;
 const initialsOf = (value) => (value || "IG").trim().slice(0, 2).toUpperCase();
+// Só quem de fato conversou por Direct — comentário isolado (mesmo com resposta automática
+// via outgoing_rule) não conta como contato de DM até a pessoa responder de volta.
+const DM_EVENT_TYPES = new Set(["message", "postback", "outgoing"]);
+const hasDmHistory = (contact) => (contact.history || []).some((event) => DM_EVENT_TYPES.has(event.type));
 const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [] };
 const PIPELINE_STAGES = [["novo", "Novo"], ["contatado", "Contatado"], ["qualificado", "Qualificado"], ["cliente", "Cliente"], ["perdido", "Perdido"]];
 let pipelineOrigin = "all";
@@ -129,9 +133,9 @@ function renderModeration() {
 
 function renderContacts(query = "") {
   const normalized = query.trim().toLowerCase();
-  const contacts = state.contacts.filter((contact) => !normalized || [contact.username, ...(contact.tags || []), contact.history?.[0]?.text]
+  const contacts = state.contacts.filter(hasDmHistory).filter((contact) => !normalized || [contact.username, ...(contact.tags || []), contact.history?.[0]?.text]
     .some((value) => String(value || "").toLowerCase().includes(normalized)));
-  $("#contacts-list").innerHTML = contacts.length ? contacts.map((contact) => `<button class="contact-row ${contact.id === state.selectedContactId ? "active" : ""}" data-contact="${escapeHtml(contact.id)}"><span class="contact-avatar">${escapeHtml(initialsOf(contact.username))}</span><span><strong>${escapeHtml(contactLabel(contact))}</strong><small>${escapeHtml(truncate(contact.history?.[0]?.text || "Interação registrada", 42))}</small></span><i>${contact.interactionCount}</i></button>`).join("") : '<p class="empty">Nenhum contato encontrado.</p>';
+  $("#contacts-list").innerHTML = contacts.length ? contacts.map((contact) => `<button class="contact-row ${contact.id === state.selectedContactId ? "active" : ""}" data-contact="${escapeHtml(contact.id)}"><span class="contact-avatar">${escapeHtml(initialsOf(contact.username))}</span><span><strong>${escapeHtml(contactLabel(contact))}</strong><small>${escapeHtml(truncate(contact.history?.[0]?.text || "Interação registrada", 42))}</small></span><i>${contact.interactionCount}</i></button>`).join("") : '<p class="empty">Nenhum contato entrou em contato pela DM ainda.</p>';
 }
 
 const OUTGOING_EVENT_TYPES = new Set(["outgoing", "outgoing_rule"]);
@@ -240,11 +244,9 @@ function renderLeads() {
   </article>`).join("") : '<p class="empty">Nenhum lead capturado ainda.</p>';
 }
 
-const DM_EVENT_TYPES = new Set(["message", "postback", "outgoing"]);
-
 function buildPipelineItems() {
   const contactItems = state.contacts
-    .filter((contact) => (contact.history || []).some((event) => DM_EVENT_TYPES.has(event.type)))
+    .filter(hasDmHistory)
     .map((contact) => ({
       key: `contact:${contact.id}`, kind: "contact", id: contact.id,
       label: contactLabel(contact),
@@ -657,20 +659,22 @@ $("#moderation-list").addEventListener("click", async (event) => {
   comment.hidden = !comment.hidden; renderModeration();
 });
 $("#contact-search").addEventListener("input", (event) => renderContacts(event.target.value));
-$("#resync-usernames").addEventListener("click", async (event) => {
-  const button = event.currentTarget; const status = $("#resync-status");
-  button.disabled = true; status.textContent = "Buscando nomes reais na API da Meta... pode levar um tempo.";
+async function resyncUsernames(button, statusEl) {
+  button.disabled = true; statusEl.textContent = "Buscando nomes reais na API da Meta... pode levar um tempo.";
   try {
     const result = await request("/api/contacts/resync-usernames", { method: "POST" });
-    status.textContent = `${result.cleaned} nome(s) genérico(s) corrigido(s), ${result.resolved} de ${result.attempted} tentativa(s) resolvida(s) com nome real.`;
+    statusEl.textContent = `${result.cleaned} nome(s) genérico(s) corrigido(s), ${result.resolved} de ${result.attempted} tentativa(s) resolvida(s) com nome real.`;
     await loadContacts();
+    renderPipeline();
     if (state.selectedContactId) await openContact(state.selectedContactId);
   } catch (error) {
-    status.textContent = error.message;
+    statusEl.textContent = error.message;
   } finally {
     button.disabled = false;
   }
-});
+}
+$("#resync-usernames").addEventListener("click", (event) => resyncUsernames(event.currentTarget, $("#resync-status")));
+$("#pipeline-resync-usernames").addEventListener("click", (event) => resyncUsernames(event.currentTarget, $("#pipeline-resync-status")));
 $("#contacts-list").addEventListener("click", (event) => { const row = event.target.closest("[data-contact]"); if (row) openContact(row.dataset.contact); });
 $("#media-grid").addEventListener("click", (event) => { const card = event.target.closest("[data-media]"); if (card) openMedia(card.dataset.media); });
 $("#rule-form").addEventListener("submit", async (event) => {
