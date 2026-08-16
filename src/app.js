@@ -97,9 +97,15 @@ export function createApp({ store, meta, config, serveStatic }) {
           const { supabaseUrl, supabaseSecretKey } = JSON.parse(await readBody(request));
           if (!supabaseUrl && !supabaseSecretKey) return json(response, 200, { ok: true, message: "Sem Supabase — vai usar arquivo local." });
           if (!supabaseUrl || !supabaseSecretKey) return json(response, 400, { error: "Informe URL e secret key, ou deixe os dois em branco." });
+          let hostname;
+          try { hostname = new URL(supabaseUrl).hostname; } catch { return json(response, 400, { error: "URL do Supabase inválida." }); }
+          if (await isBlockedTarget(hostname)) return json(response, 400, { error: "Esse endereço é bloqueado (aponta pra um endereço de metadados de nuvem)." });
           try {
-            const testResponse = await fetch(`${String(supabaseUrl).replace(/\/$/, "")}/rest/v1/`, { headers: { apikey: supabaseSecretKey }, signal: AbortSignal.timeout(6000) });
-            if (testResponse.status === 200) return json(response, 200, { ok: true, message: "Conectado ✓" });
+            const testResponse = await fetch(`${String(supabaseUrl).replace(/\/$/, "")}/rest/v1/manydudu_state?select=id&limit=1`,
+              { headers: { apikey: supabaseSecretKey }, signal: AbortSignal.timeout(6000) });
+            if (testResponse.status === 200) return json(response, 200, { ok: true, message: "Conectado ✓ — tabela encontrada." });
+            if (testResponse.status === 401 || testResponse.status === 403) return json(response, 400, { error: "Credenciais recusadas — confira a URL e a secret key." });
+            if (testResponse.status === 404) return json(response, 400, { error: "Conectei, mas a tabela \"manydudu_state\" não existe ainda — rode o SQL do passo acima no SQL Editor do Supabase primeiro." });
             return json(response, 400, { error: `Supabase respondeu ${testResponse.status} — confira a URL e a secret key.` });
           } catch {
             return json(response, 400, { error: "Não consegui conectar nesse endereço." });

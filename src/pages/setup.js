@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { escapeHtml } from "../util/html.js";
+
+const SUPABASE_SQL = readFileSync(fileURLToPath(new URL("../../supabase/migrations/001_manydudu_state.sql", import.meta.url)), "utf8").trim();
 
 export function renderSetupPage(token) {
   return `<!doctype html><html lang="pt-BR"><head>
@@ -24,6 +28,10 @@ body{display:grid;place-items:center;min-height:100vh;padding:24px}
 .test-row .test-status{font-size:11px;color:var(--muted)}
 .test-row .test-status.ok{color:var(--green)}
 .test-row .test-status.fail{color:var(--danger)}
+.sql-block{position:relative;margin:0 0 14px}
+.sql-block pre{margin:0;max-height:180px;overflow:auto;padding:14px;border:1px solid var(--line);border-radius:8px;background:#0b0a09;color:#cde0ff;font:11px/1.5 'Martian Mono',monospace;white-space:pre-wrap;word-break:break-word}
+.sql-block button{position:absolute;top:8px;right:8px;border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--surface2);color:var(--muted);font-size:10px;cursor:pointer}
+.sql-block button.copied{border-color:#3de0a252;color:var(--green)}
 .setup-card .wide{width:100%;margin-top:4px}
 .form-error{min-height:16px;margin:12px 0 0;color:var(--danger);font-size:11px;text-align:center}
 .setup-success{display:none;text-align:center}
@@ -58,6 +66,9 @@ body{display:grid;place-items:center;min-height:100vh;padding:24px}
       <div class="setup-step">
         <h2>3. Banco de dados (opcional)</h2>
         <p class="hint">Sem isso, o ManyDudu guarda tudo num arquivo local — funciona, mas não sobrevive a uma reinstalação do zero. Com Supabase, seus dados ficam seguros na nuvem.</p>
+        <p class="hint">Antes de preencher os campos abaixo: crie um projeto grátis em <strong>supabase.com</strong>, abra o <strong>SQL Editor</strong> e cole+rode o SQL abaixo uma única vez — ele cria a tabela que o ManyDudu usa.</p>
+        <div class="sql-block"><pre id="supabase-sql">${escapeHtml(SUPABASE_SQL)}</pre><button type="button" id="copy-supabase-sql">Copiar SQL</button></div>
+        <p class="hint">Depois, em <strong>Project Settings → API Keys</strong>, copie a URL do projeto e a <strong>Secret key</strong> (não a "anon" key).</p>
         <label>URL do projeto Supabase<input name="supabaseUrl" placeholder="https://xxxxx.supabase.co"></label>
         <label>Secret key<input name="supabaseSecretKey" placeholder="sb_secret_..."></label>
         <div class="test-row"><button type="button" id="test-supabase">Testar conexão</button><span class="test-status" id="test-supabase-status"></span></div>

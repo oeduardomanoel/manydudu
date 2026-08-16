@@ -23,6 +23,13 @@ async function withServer(config, run) {
   }
 }
 
+function startFakeSupabase(status) {
+  const server = createServer((_req, res) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end("{}"); });
+  return new Promise((resolve) => {
+    server.listen(0, () => resolve({ server, url: `http://127.0.0.1:${server.address().port}` }));
+  });
+}
+
 function baseConfig(overrides = {}) {
   return {
     verifyToken: "", appSecret: "", configured: false, adminUser: "eduardo", adminPassword: "",
@@ -122,5 +129,51 @@ test("setup API routes are unreachable (404) once adminPassword is already confi
   await withServer(config, async (baseUrl) => {
     const res = await fetch(`${baseUrl}/api/setup/test-meta`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     assert.equal(res.status, 404);
+  });
+});
+
+test("POST /api/setup/test-supabase confirms the table exists on a 200", async () => {
+  const { server, url } = await startFakeSupabase(200);
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/setup/test-supabase?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ supabaseUrl: url, supabaseSecretKey: "x" }) });
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.match(body.message, /tabela encontrada/);
+  });
+  await new Promise((resolve) => server.close(resolve));
+});
+
+test("POST /api/setup/test-supabase tells the student to run the SQL when the table is missing (404)", async () => {
+  const { server, url } = await startFakeSupabase(404);
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/setup/test-supabase?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ supabaseUrl: url, supabaseSecretKey: "x" }) });
+    const body = await res.json();
+    assert.equal(res.status, 400);
+    assert.match(body.error, /rode o SQL/);
+  });
+  await new Promise((resolve) => server.close(resolve));
+});
+
+test("POST /api/setup/test-supabase reports bad credentials distinctly from a missing table", async () => {
+  const { server, url } = await startFakeSupabase(401);
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/setup/test-supabase?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ supabaseUrl: url, supabaseSecretKey: "x" }) });
+    const body = await res.json();
+    assert.equal(res.status, 400);
+    assert.match(body.error, /Credenciais recusadas/);
+  });
+  await new Promise((resolve) => server.close(resolve));
+});
+
+test("POST /api/setup/test-supabase rejects a URL resolving to the cloud metadata range", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/setup/test-supabase?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ supabaseUrl: "https://169.254.169.254", supabaseSecretKey: "x" }) });
+    const body = await res.json();
+    assert.equal(res.status, 400);
+    assert.match(body.error, /bloqueado/);
   });
 });

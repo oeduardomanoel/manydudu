@@ -32,6 +32,18 @@ function wireTest(buttonId, statusId, path, fields) {
 wireTest("test-meta", "test-meta-status", "/api/setup/test-meta", ["metaAccessToken", "metaAppSecret", "instagramAccountId"]);
 wireTest("test-supabase", "test-supabase-status", "/api/setup/test-supabase", ["supabaseUrl", "supabaseSecretKey"]);
 
+const copySqlButton = document.getElementById("copy-supabase-sql");
+copySqlButton?.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(document.getElementById("supabase-sql").textContent);
+    copySqlButton.textContent = "Copiado ✓";
+    copySqlButton.classList.add("copied");
+    setTimeout(() => { copySqlButton.textContent = "Copiar SQL"; copySqlButton.classList.remove("copied"); }, 2000);
+  } catch {
+    copySqlButton.textContent = "Selecione e copie manualmente";
+  }
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const error = document.getElementById("form-error");
