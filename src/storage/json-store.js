@@ -96,6 +96,9 @@ export class JsonStore {
   async setContactPaused(id, paused) {
     await this.update((state) => { if (hasOwn(state.contacts, id)) state.contacts[id].automationPaused = Boolean(paused); });
   }
+  async setContactUsername(id, username) {
+    await this.update((state) => { if (hasOwn(state.contacts, id)) state.contacts[id].username = username; });
+  }
   async isContactPaused(id) {
     const contact = await this.getContact(id);
     return Boolean(contact?.automationPaused);

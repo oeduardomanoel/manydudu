@@ -12,6 +12,9 @@ import { scoreContact, scoreLead } from "./domain/lead-score.js";
 import { buildContentRoi } from "./domain/roi.js";
 import { validateSettings } from "./domain/settings.js";
 import { deliverStageChange, isBlockedTarget } from "./domain/outbound-webhook.js";
+import { buildPurchaseEvent } from "./domain/purchase-event.js";
+import { sendConversionEvent } from "./meta/conversions-client.js";
+import { planUsernameResync } from "./domain/username-resync.js";
 import { PIPELINE_STAGES } from "./domain/pipeline.js";
 import { AppError } from "./util/errors.js";
 import { sanitizeHtml } from "./util/html.js";
@@ -232,6 +235,22 @@ export function createApp({ store, meta, config, serveStatic }) {
         const contacts = await store.listContacts();
         return json(response, 200, { contacts: contacts.map((contact) => ({ ...contact, score: scoreContact(contact) })) });
       }
+      if (request.method === "POST" && url.pathname === "/api/contacts/resync-usernames") {
+        const contacts = await store.listContacts();
+        const plan = planUsernameResync(contacts);
+        let cleaned = 0, attempted = 0, resolved = 0;
+        for (const step of plan) {
+          if (step.clearLegacy) { await store.setContactUsername(step.id, null); cleaned++; }
+          if (step.attemptLookup) {
+            attempted++;
+            try {
+              const profile = await meta.getUserProfile(step.id);
+              if (profile.username) { await store.setContactUsername(step.id, profile.username); resolved++; }
+            } catch { /* sem consentimento de mensagem ainda, ou erro da API — mantém sem nome */ }
+          }
+        }
+        return json(response, 200, { ok: true, total: contacts.length, cleaned, attempted, resolved });
+      }
       if (request.method === "GET" && url.pathname === "/api/analytics") {
         const state = await store.read();
         return json(response, 200, buildAnalytics(state));
@@ -272,7 +291,7 @@ export function createApp({ store, meta, config, serveStatic }) {
         }
         return contact ? json(response, 200, contact) : json(response, 404, { error: "Contato não encontrado." });
       }
-      const contactActionPath = url.pathname.match(/^\/api\/contacts\/([^/]+)\/(messages|pause)$/);
+      const contactActionPath = url.pathname.match(/^\/api\/contacts\/([^/]+)\/(messages|pause|mark-paid)$/);
       if (request.method === "POST" && contactActionPath?.[2] === "pause") {
         const { paused } = JSON.parse(await readBody(request));
         if (!(await store.getContact(contactActionPath[1]))) return json(response, 404, { error: "Contato não encontrado." });
@@ -290,6 +309,19 @@ export function createApp({ store, meta, config, serveStatic }) {
           text: message, at: new Date().toISOString() });
         await store.setContactPaused(contactActionPath[1], true);
         return json(response, 201, { ok: true });
+      }
+      if (request.method === "POST" && contactActionPath?.[2] === "mark-paid") {
+        const contactId = contactActionPath[1];
+        const contact = await store.getContact(contactId);
+        if (!contact) return json(response, 404, { error: "Contato não encontrado." });
+        const { value, currency } = JSON.parse(await readBody(request));
+        const settings = await store.getSettings();
+        if (!settings.metaPixelId || !settings.metaCapiToken) throw new AppError("Configure o Pixel ID e o token do Conversions API primeiro.");
+        const event = buildPurchaseEvent({ contactId, value, currency });
+        await sendConversionEvent({ pixelId: settings.metaPixelId, accessToken: settings.metaCapiToken, event });
+        await store.recordContactEvent({ contactId, username: contact.username, type: "purchase",
+          text: `Marcado como pago — ${event.custom_data.currency} ${event.custom_data.value.toFixed(2)}`, at: new Date().toISOString() });
+        return json(response, 200, { ok: true });
       }
       const commentsPath = url.pathname.match(/^\/api\/media\/([^/]+)\/comments$/);
       if (request.method === "GET" && commentsPath) {

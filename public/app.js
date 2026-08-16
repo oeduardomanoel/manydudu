@@ -134,12 +134,23 @@ function renderContacts(query = "") {
   $("#contacts-list").innerHTML = contacts.length ? contacts.map((contact) => `<button class="contact-row ${contact.id === state.selectedContactId ? "active" : ""}" data-contact="${escapeHtml(contact.id)}"><span class="contact-avatar">${escapeHtml(initialsOf(contact.username))}</span><span><strong>${escapeHtml(contactLabel(contact))}</strong><small>${escapeHtml(truncate(contact.history?.[0]?.text || "Interação registrada", 42))}</small></span><i>${contact.interactionCount}</i></button>`).join("") : '<p class="empty">Nenhum contato encontrado.</p>';
 }
 
+const OUTGOING_EVENT_TYPES = new Set(["outgoing", "outgoing_rule"]);
+const BUBBLE_LABELS = { comment: "Comentário público", postback: "Botão", purchase: "Pagamento", outgoing: "Você", outgoing_rule: "Você" };
+
+function bubbleHtml(event) {
+  const isOut = OUTGOING_EVENT_TYPES.has(event.type);
+  const isPurchase = event.type === "purchase";
+  const cls = isPurchase ? "chat-bubble purchase" : isOut ? "chat-bubble out" : "chat-bubble in";
+  return `<div class="${cls}"><span class="chat-bubble-meta">${BUBBLE_LABELS[event.type] || "Direct"}</span><p>${escapeHtml(event.text)}</p><time>${new Date(event.at).toLocaleString("pt-BR")}</time></div>`;
+}
+
 async function openContact(contactId) {
   const contact = await request(`/api/contacts/${contactId}`);
   state.selectedContactId = contactId;
   renderContacts($("#contact-search").value);
-  const history = (contact.history || []).map((event) => `<article class="history-event ${event.type}"><span>${event.type === "comment" ? "COMENTÁRIO" : event.type === "postback" ? "BOTÃO" : event.type === "outgoing" ? "VOCÊ" : "DIRECT"}</span><p>${escapeHtml(event.text)}</p><time>${new Date(event.at).toLocaleString("pt-BR")}</time></article>`).join("");
-  $("#contact-detail").innerHTML = `<div class="contact-title"><div><p class="eyebrow">CAIXA DE ENTRADA</p><h3>${escapeHtml(contactLabel(contact))}</h3></div><div class="contact-states"><span class="follow-state ${contact.follower ? "yes" : ""}">${contact.follower ? "✓ segue o perfil" : "status não verificado"}</span><button id="pause-contact" class="pause-button ${contact.automationPaused ? "paused" : ""}">${contact.automationPaused ? "▶ Retomar automação" : "Ⅱ Pausar automação"}</button></div></div><div class="tags">${(contact.tags || []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") || '<small>Sem tags</small>'}</div><div class="history-list">${history || '<p class="empty">Sem histórico.</p>'}</div><form id="reply-form" class="reply-form"><textarea name="text" maxlength="1000" required placeholder="Escreva uma resposta manual..."></textarea><button class="primary compact" type="submit">Enviar Direct</button><small>Ao enviar, a automação desta pessoa será pausada.</small></form><form id="contact-form"><label>Tags separadas por vírgula<input name="tags" value="${escapeHtml((contact.tags || []).join(", "))}" placeholder="lead, material"></label><label>Nova nota<textarea name="note" placeholder="Ex.: pediu o guia de IA"></textarea></label><button class="primary compact" type="submit">Salvar contato</button></form>`;
+  const history = (contact.history || []).slice().reverse().map(bubbleHtml).join("");
+  $("#contact-detail").innerHTML = `<div class="contact-title"><div><p class="eyebrow">CAIXA DE ENTRADA</p><h3>${escapeHtml(contactLabel(contact))}</h3></div><div class="contact-states"><span class="follow-state ${contact.follower ? "yes" : ""}">${contact.follower ? "✓ segue o perfil" : "status não verificado"}</span><button id="mark-paid-open" class="pause-button" type="button">💰 Marcar como pago</button><button id="pause-contact" class="pause-button ${contact.automationPaused ? "paused" : ""}">${contact.automationPaused ? "▶ Retomar automação" : "Ⅱ Pausar automação"}</button></div></div><div class="tags">${(contact.tags || []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") || '<small>Sem tags</small>'}</div><div class="chat-thread" id="chat-thread">${history || '<p class="empty">Sem histórico.</p>'}</div><form id="reply-form" class="reply-form"><textarea name="text" maxlength="1000" required placeholder="Escreva uma resposta manual..."></textarea><button class="primary compact" type="submit">Enviar Direct</button><small>Ao enviar, a automação desta pessoa será pausada.</small></form><form id="contact-form"><label>Tags separadas por vírgula<input name="tags" value="${escapeHtml((contact.tags || []).join(", "))}" placeholder="lead, material"></label><label>Nova nota<textarea name="note" placeholder="Ex.: pediu o guia de IA"></textarea></label><button class="primary compact" type="submit">Salvar contato</button></form>`;
+  const thread = $("#chat-thread"); thread.scrollTop = thread.scrollHeight;
   $("#pause-contact").addEventListener("click", async () => {
     await request(`/api/contacts/${contactId}/pause`, { method: "POST", body: JSON.stringify({ paused: !contact.automationPaused }) });
     await loadContacts(); await openContact(contactId);
@@ -156,7 +167,32 @@ async function openContact(contactId) {
     await loadContacts();
     await openContact(contactId);
   });
+  $("#mark-paid-open").addEventListener("click", () => openMarkPaidDialog(contactId, contactLabel(contact)));
 }
+
+function openMarkPaidDialog(contactId, label) {
+  const form = $("#mark-paid-form");
+  form.reset();
+  form.dataset.contactId = contactId;
+  $("#mark-paid-title").textContent = label;
+  $("#mark-paid-error").textContent = "";
+  $("#mark-paid-dialog").showModal();
+}
+
+$("#mark-paid-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const contactId = event.currentTarget.dataset.contactId;
+  const value = Number(new FormData(event.currentTarget).get("value"));
+  const errorEl = $("#mark-paid-error");
+  errorEl.textContent = "";
+  try {
+    await request(`/api/contacts/${contactId}/mark-paid`, { method: "POST", body: JSON.stringify({ value, currency: "BRL" }) });
+    $("#mark-paid-dialog").close();
+    await openContact(contactId);
+  } catch (error) {
+    errorEl.textContent = error.message;
+  }
+});
 
 async function loadCampaigns() {
   const result = await request("/api/campaigns");
@@ -294,6 +330,8 @@ async function loadHealth() {
 async function loadWebhookSettings() {
   const settings = await request("/api/settings");
   $("#webhook-form").elements.outboundWebhookUrl.value = settings.outboundWebhookUrl || "";
+  $("#capi-form").elements.metaPixelId.value = settings.metaPixelId || "";
+  $("#capi-form").elements.metaCapiToken.value = settings.metaCapiToken || "";
 }
 
 $("#webhook-form").addEventListener("submit", async (event) => {
@@ -318,6 +356,21 @@ $("#webhook-test").addEventListener("click", async () => {
     await request("/api/settings/test-webhook", { method: "POST" });
     status.style.color = "var(--green)";
     status.textContent = "Recebido ✓";
+  } catch (error) {
+    status.style.color = "var(--danger)";
+    status.textContent = error.message;
+  }
+});
+
+$("#capi-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = $("#capi-status");
+  status.textContent = "";
+  const { metaPixelId, metaCapiToken } = event.currentTarget.elements;
+  try {
+    await request("/api/settings", { method: "PATCH", body: JSON.stringify({ metaPixelId: metaPixelId.value.trim(), metaCapiToken: metaCapiToken.value.trim() }) });
+    status.style.color = "var(--green)";
+    status.textContent = "Salvo ✓";
   } catch (error) {
     status.style.color = "var(--danger)";
     status.textContent = error.message;
@@ -382,7 +435,7 @@ function openPipelineDetail(key) {
     <div class="pipeline-detail-fields">${fields.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join("")}</div>
     ${niches.length ? `<div class="pipeline-detail-niches">${niches.map((niche) => `<span>${escapeHtml(niche)}</span>`).join("")}</div>` : ""}
     ${item.kind === "lead" ? `<p style="margin:-8px 0 16px;color:var(--muted);font-size:11px;line-height:1.5">${escapeHtml(item.raw.automationInterest)}</p>` : ""}
-    ${history.length ? `<div class="pipeline-detail-history">${history.map((event) => `<article class="history-event ${event.type}"><span>${event.type === "comment" ? "COMENTÁRIO" : event.type === "postback" ? "BOTÃO" : event.type === "outgoing" ? "VOCÊ" : "DIRECT"}</span><p>${escapeHtml(event.text)}</p><time>${new Date(event.at).toLocaleString("pt-BR")}</time></article>`).join("")}</div>` : ""}
+    ${history.length ? `<div class="pipeline-detail-history">${history.map((event) => `<article class="history-event ${OUTGOING_EVENT_TYPES.has(event.type) ? "outgoing" : ""}"><span>${event.type === "comment" ? "COMENTÁRIO" : event.type === "postback" ? "BOTÃO" : event.type === "purchase" ? "PAGAMENTO" : OUTGOING_EVENT_TYPES.has(event.type) ? "VOCÊ" : "DIRECT"}</span><p>${escapeHtml(event.text)}</p><time>${new Date(event.at).toLocaleString("pt-BR")}</time></article>`).join("")}</div>` : ""}
     <form id="pipeline-detail-form">
       <label>Estágio<select name="stage">${PIPELINE_STAGES.map(([key, label]) => `<option value="${key}" ${item.stage === key ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select></label>
       <label>Próxima ação (data)<input type="date" name="nextActionAt" value="${escapeHtml(item.nextActionAt || "")}"></label>
@@ -604,6 +657,20 @@ $("#moderation-list").addEventListener("click", async (event) => {
   comment.hidden = !comment.hidden; renderModeration();
 });
 $("#contact-search").addEventListener("input", (event) => renderContacts(event.target.value));
+$("#resync-usernames").addEventListener("click", async (event) => {
+  const button = event.currentTarget; const status = $("#resync-status");
+  button.disabled = true; status.textContent = "Buscando nomes reais na API da Meta... pode levar um tempo.";
+  try {
+    const result = await request("/api/contacts/resync-usernames", { method: "POST" });
+    status.textContent = `${result.cleaned} nome(s) genérico(s) corrigido(s), ${result.resolved} de ${result.attempted} tentativa(s) resolvida(s) com nome real.`;
+    await loadContacts();
+    if (state.selectedContactId) await openContact(state.selectedContactId);
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 $("#contacts-list").addEventListener("click", (event) => { const row = event.target.closest("[data-contact]"); if (row) openContact(row.dataset.contact); });
 $("#media-grid").addEventListener("click", (event) => { const card = event.target.closest("[data-media]"); if (card) openMedia(card.dataset.media); });
 $("#rule-form").addEventListener("submit", async (event) => {
