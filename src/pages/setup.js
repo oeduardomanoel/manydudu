@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { escapeHtml } from "../util/html.js";
@@ -5,6 +6,7 @@ import { escapeHtml } from "../util/html.js";
 const SUPABASE_SQL = readFileSync(fileURLToPath(new URL("../../supabase/migrations/001_manydudu_state.sql", import.meta.url)), "utf8").trim();
 
 export function renderSetupPage(token) {
+  const suggestedVerifyToken = randomBytes(16).toString("hex");
   return `<!doctype html><html lang="pt-BR"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ManyDudu · Configuração inicial</title>
@@ -62,6 +64,9 @@ body{display:grid;place-items:center;min-height:100vh;padding:24px}
           <label>App Secret<input name="metaAppSecret" required></label>
         </div>
         <label>ID da conta do Instagram<input name="instagramAccountId" required></label>
+        <label>Verify token (você escolhe — vai usar esse mesmo valor no webhook da Meta)
+          <input name="metaVerifyToken" required value="${escapeHtml(suggestedVerifyToken)}"></label>
+        <p class="hint">Sugerido automaticamente, mas pode trocar por algo seu — só precisa ser o mesmo valor colado depois no painel da Meta. Se você já configurou o webhook antes com outro valor, cola aquele aqui em vez do sugerido, pra não ter que editar na Meta de novo.</p>
         <div class="test-row"><button type="button" id="test-meta">Testar credenciais</button><span class="test-status" id="test-meta-status"></span></div>
       </div>
       <div class="setup-step">

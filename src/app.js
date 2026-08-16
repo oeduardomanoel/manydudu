@@ -123,11 +123,11 @@ export function createApp({ store, meta, config, serveStatic }) {
           const metaAppSecret = String(input.metaAppSecret ?? "").trim();
           const instagramAccountId = String(input.instagramAccountId ?? "").trim();
           if (!metaAccessToken || !metaAppId || !metaAppSecret || !instagramAccountId) throw new AppError("Preencha as credenciais da Meta.");
+          const metaVerifyToken = String(input.metaVerifyToken ?? "").trim() || randomBytes(16).toString("hex");
           const supabaseUrl = String(input.supabaseUrl ?? "").trim();
           const supabaseSecretKey = String(input.supabaseSecretKey ?? "").trim();
           if (Boolean(supabaseUrl) !== Boolean(supabaseSecretKey)) throw new AppError("Informe URL e secret key do Supabase juntas, ou deixe os dois em branco.");
 
-          const metaVerifyToken = randomBytes(16).toString("hex");
           const updates = {
             ADMIN_USER: adminUser, ADMIN_PASSWORD: adminPassword, SESSION_SECRET: randomBytes(32).toString("hex"),
             META_ACCESS_TOKEN: metaAccessToken, META_APP_ID: metaAppId, META_APP_SECRET: metaAppSecret, META_VERIFY_TOKEN: metaVerifyToken,

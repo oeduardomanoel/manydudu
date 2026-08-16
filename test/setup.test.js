@@ -104,6 +104,20 @@ test("POST /api/setup/complete rejects a short password without writing anything
   });
 });
 
+test("POST /api/setup/complete uses the admin's own verify token instead of generating a new one", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "IGAALtest", metaAppId: "1", metaAppSecret: "secret", instagramAccountId: "12345", metaVerifyToken: "meu-token-escolhido" };
+    const res = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal(res.status, 200);
+    const result = await res.json();
+    assert.equal(result.metaVerifyToken, "meu-token-escolhido");
+    const written = await readFile(config.envPath, "utf8");
+    assert.match(written, /^META_VERIFY_TOKEN=meu-token-escolhido$/m);
+    await rm(config.envPath);
+  });
+});
+
 test("POST /api/setup/complete rejects missing App ID (needed to build the app token for debug_token)", async () => {
   const config = baseConfig();
   await withServer(config, async (baseUrl) => {
