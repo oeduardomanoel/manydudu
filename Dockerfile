@@ -15,4 +15,4 @@ ENV PORT=3000
 EXPOSE 3000
 
 USER node
-CMD ["npm", "start"]
+CMD sh -c 'if [ -f "${MANYDUDU_ENV_PATH:-.env}" ]; then exec node --env-file="${MANYDUDU_ENV_PATH:-.env}" src/server.js; else exec node src/server.js; fi'
