@@ -83,10 +83,11 @@ export function createApp({ store, meta, config, serveStatic }) {
           return html(response, 200, renderSetupPage(url.searchParams.get("token")));
         }
         if (request.method === "POST" && url.pathname === "/api/setup/test-meta") {
-          const { metaAccessToken } = JSON.parse(await readBody(request));
+          const { metaAccessToken, metaAppId, metaAppSecret } = JSON.parse(await readBody(request));
           if (!metaAccessToken) return json(response, 400, { error: "Informe o token de acesso." });
+          if (!metaAppId || !metaAppSecret) return json(response, 400, { error: "Informe o App ID e o App Secret primeiro." });
           try {
-            const info = await debugToken(metaAccessToken);
+            const info = await debugToken(metaAccessToken, metaAppId, metaAppSecret);
             const days = info.expires_at ? Math.max(0, Math.round((info.expires_at * 1000 - Date.now()) / 86400000)) : null;
             return json(response, 200, { ok: true, message: days != null ? `Token válido — expira em ${days} dias.` : "Token válido." });
           } catch (error) {
@@ -118,9 +119,10 @@ export function createApp({ store, meta, config, serveStatic }) {
           if (!adminUser) throw new AppError("Informe o usuário do painel.");
           if (adminPassword.length < 8) throw new AppError("A senha precisa ter pelo menos 8 caracteres.");
           const metaAccessToken = String(input.metaAccessToken ?? "").trim();
+          const metaAppId = String(input.metaAppId ?? "").trim();
           const metaAppSecret = String(input.metaAppSecret ?? "").trim();
           const instagramAccountId = String(input.instagramAccountId ?? "").trim();
-          if (!metaAccessToken || !metaAppSecret || !instagramAccountId) throw new AppError("Preencha as credenciais da Meta.");
+          if (!metaAccessToken || !metaAppId || !metaAppSecret || !instagramAccountId) throw new AppError("Preencha as credenciais da Meta.");
           const supabaseUrl = String(input.supabaseUrl ?? "").trim();
           const supabaseSecretKey = String(input.supabaseSecretKey ?? "").trim();
           if (Boolean(supabaseUrl) !== Boolean(supabaseSecretKey)) throw new AppError("Informe URL e secret key do Supabase juntas, ou deixe os dois em branco.");
@@ -128,7 +130,7 @@ export function createApp({ store, meta, config, serveStatic }) {
           const metaVerifyToken = randomBytes(16).toString("hex");
           const updates = {
             ADMIN_USER: adminUser, ADMIN_PASSWORD: adminPassword, SESSION_SECRET: randomBytes(32).toString("hex"),
-            META_ACCESS_TOKEN: metaAccessToken, META_APP_SECRET: metaAppSecret, META_VERIFY_TOKEN: metaVerifyToken,
+            META_ACCESS_TOKEN: metaAccessToken, META_APP_ID: metaAppId, META_APP_SECRET: metaAppSecret, META_VERIFY_TOKEN: metaVerifyToken,
             INSTAGRAM_ACCOUNT_ID: instagramAccountId,
           };
           if (supabaseUrl) { updates.SUPABASE_URL = supabaseUrl; updates.SUPABASE_SECRET_KEY = supabaseSecretKey; }

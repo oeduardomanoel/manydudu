@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isInstagramLoginToken, needsRefresh, maybeRefreshToken } from "../src/meta/token-refresh.js";
+import { debugToken, isInstagramLoginToken, needsRefresh, maybeRefreshToken } from "../src/meta/token-refresh.js";
 
 const jsonResponse = (body, ok = true, status = 200) => ({ ok, status, json: async () => body });
 
@@ -28,6 +28,27 @@ test("needsRefresh is true with no known expiry and true when close to expiring"
   assert.equal(needsRefresh(null), true);
   assert.equal(needsRefresh(Date.now() + 2 * 24 * 60 * 60 * 1000), true);
   assert.equal(needsRefresh(Date.now() + 30 * 24 * 60 * 60 * 1000), false);
+});
+
+test("debugToken uses an app token (appId|appSecret) as access_token, never the inspected token itself", async () => {
+  let capturedUrl;
+  await debugToken("IGAALuserToken", "123456", "shh-secret", async (url) => { capturedUrl = url; return jsonResponse({ expires_at: 1 }); });
+  const params = new URL(capturedUrl).searchParams;
+  assert.equal(params.get("input_token"), "IGAALuserToken");
+  assert.equal(params.get("access_token"), "123456|shh-secret");
+});
+
+test("maybeRefreshToken calls debugToken with appId/appSecret when there's no cached expiry yet", async () => {
+  const meta = fakeMeta("IGAALcurrent");
+  const store = fakeStore(null);
+  let capturedUrl;
+  const fetcher = async (url) => {
+    capturedUrl = url;
+    return jsonResponse({ expires_at: Math.floor((Date.now() + 40 * 24 * 60 * 60 * 1000) / 1000) });
+  };
+  await maybeRefreshToken({ meta, store, appId: "123456", appSecret: "shh-secret", fetcher });
+  assert.match(capturedUrl, /debug_token/);
+  assert.ok(new URL(capturedUrl).searchParams.get("access_token") === "123456|shh-secret");
 });
 
 test("maybeRefreshToken skips non-Instagram-login tokens entirely", async () => {

@@ -78,7 +78,7 @@ test("/setup always returns 404 once an admin password exists, even if a stale t
 test("POST /api/setup/complete writes the env file and returns a fresh verify token", async () => {
   const config = baseConfig();
   await withServer(config, async (baseUrl) => {
-    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "IGAALtest", metaAppSecret: "secret", instagramAccountId: "12345" };
+    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "IGAALtest", metaAppId: "999888777", metaAppSecret: "secret", instagramAccountId: "12345" };
     const res = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     assert.equal(res.status, 200);
     const result = await res.json();
@@ -89,6 +89,7 @@ test("POST /api/setup/complete writes the env file and returns a fresh verify to
     assert.match(written, /^ADMIN_PASSWORD=senha-forte-123$/m);
     assert.match(written, /^SESSION_SECRET=[0-9a-f]{64}$/m);
     assert.match(written, /^META_ACCESS_TOKEN=IGAALtest$/m);
+    assert.match(written, /^META_APP_ID=999888777$/m);
     await rm(config.envPath);
   });
 });
@@ -96,7 +97,17 @@ test("POST /api/setup/complete writes the env file and returns a fresh verify to
 test("POST /api/setup/complete rejects a short password without writing anything", async () => {
   const config = baseConfig();
   await withServer(config, async (baseUrl) => {
-    const body = { adminUser: "eduardo", adminPassword: "short", metaAccessToken: "x", metaAppSecret: "y", instagramAccountId: "1" };
+    const body = { adminUser: "eduardo", adminPassword: "short", metaAccessToken: "x", metaAppId: "1", metaAppSecret: "y", instagramAccountId: "1" };
+    const res = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal(res.status, 400);
+    await assert.rejects(readFile(config.envPath));
+  });
+});
+
+test("POST /api/setup/complete rejects missing App ID (needed to build the app token for debug_token)", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "x", metaAppSecret: "y", instagramAccountId: "1" };
     const res = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     assert.equal(res.status, 400);
     await assert.rejects(readFile(config.envPath));
@@ -106,7 +117,7 @@ test("POST /api/setup/complete rejects a short password without writing anything
 test("POST /api/setup/complete rejects mismatched Supabase fields (one filled, one empty)", async () => {
   const config = baseConfig();
   await withServer(config, async (baseUrl) => {
-    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "x", metaAppSecret: "y", instagramAccountId: "1", supabaseUrl: "https://x.supabase.co" };
+    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "x", metaAppId: "1", metaAppSecret: "y", instagramAccountId: "1", supabaseUrl: "https://x.supabase.co" };
     const res = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     assert.equal(res.status, 400);
   });
@@ -115,12 +126,22 @@ test("POST /api/setup/complete rejects mismatched Supabase fields (one filled, o
 test("POST /api/setup/complete closes the setup window immediately, without waiting for a restart", async () => {
   const config = baseConfig();
   await withServer(config, async (baseUrl) => {
-    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "x", metaAppSecret: "y", instagramAccountId: "1" };
+    const body = { adminUser: "eduardo", adminPassword: "senha-forte-123", metaAccessToken: "x", metaAppId: "1", metaAppSecret: "y", instagramAccountId: "1" };
     const first = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     assert.equal(first.status, 200);
     const second = await fetch(`${baseUrl}/api/setup/complete?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     assert.equal(second.status, 404);
     await rm(config.envPath);
+  });
+});
+
+test("POST /api/setup/test-meta requires the App ID and App Secret before attempting to validate the token", async () => {
+  const config = baseConfig();
+  await withServer(config, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/setup/test-meta?token=${config.setupToken}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ metaAccessToken: "IGAALtest" }) });
+    const body = await res.json();
+    assert.equal(res.status, 400);
+    assert.match(body.error, /App ID e o App Secret/);
   });
 });
 

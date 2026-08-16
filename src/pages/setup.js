@@ -55,12 +55,13 @@ body{display:grid;place-items:center;min-height:100vh;padding:24px}
       </div>
       <div class="setup-step">
         <h2>2. Instagram (Meta for Developers)</h2>
-        <p class="hint">Do painel do seu app na Meta: token de acesso de longa duração, App Secret e o ID da conta profissional do Instagram.</p>
+        <p class="hint">Do painel do seu app na Meta: token de acesso de longa duração, App ID, App Secret e o ID da conta profissional do Instagram.</p>
         <label>Token de acesso<input name="metaAccessToken" required></label>
         <div class="setup-row">
+          <label>App ID<input name="metaAppId" required inputmode="numeric"></label>
           <label>App Secret<input name="metaAppSecret" required></label>
-          <label>ID da conta do Instagram<input name="instagramAccountId" required></label>
         </div>
+        <label>ID da conta do Instagram<input name="instagramAccountId" required></label>
         <div class="test-row"><button type="button" id="test-meta">Testar credenciais</button><span class="test-status" id="test-meta-status"></span></div>
       </div>
       <div class="setup-step">

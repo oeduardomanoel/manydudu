@@ -4,8 +4,12 @@ export function isInstagramLoginToken(token) {
   return Boolean(token) && token.startsWith("IG");
 }
 
-export async function debugToken(token, fetcher = fetch) {
-  const response = await fetcher(`https://graph.instagram.com/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`);
+// debug_token exige um token de app (formato appId|appSecret) como access_token — o próprio
+// token de usuário sendo inspecionado não tem autoridade pra se auto-inspecionar e a Meta
+// responde "Application does not have permission for this action" se você tentar.
+export async function debugToken(token, appId, appSecret, fetcher = fetch) {
+  const appToken = `${appId}|${appSecret}`;
+  const response = await fetcher(`https://graph.instagram.com/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(appToken)}`);
   const result = await response.json();
   if (!response.ok) throw new Error(result.error?.message || `Meta respondeu ${response.status} ao checar o token.`);
   return result.data;
@@ -23,14 +27,14 @@ export function needsRefresh(expiresAt) {
   return expiresAt - Date.now() < REFRESH_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
 }
 
-export async function maybeRefreshToken({ meta, store, fetcher = fetch, log = console.log, logError = console.error }) {
+export async function maybeRefreshToken({ meta, store, appId, appSecret, fetcher = fetch, log = console.log, logError = console.error }) {
   const currentToken = meta.accessToken;
   if (!isInstagramLoginToken(currentToken)) return;
   try {
     const stored = await store.getMetaToken();
     let expiresAt = stored?.accessToken === currentToken ? stored.expiresAt : null;
     if (!expiresAt) {
-      const info = await debugToken(currentToken, fetcher);
+      const info = await debugToken(currentToken, appId, appSecret, fetcher);
       expiresAt = info.expires_at ? info.expires_at * 1000 : null;
     }
     if (!needsRefresh(expiresAt)) return;
@@ -43,8 +47,8 @@ export async function maybeRefreshToken({ meta, store, fetcher = fetch, log = co
   }
 }
 
-export function scheduleTokenRefresh({ meta, store, fetcher = fetch, intervalMs = 24 * 60 * 60 * 1000 }) {
-  const run = () => maybeRefreshToken({ meta, store, fetcher });
+export function scheduleTokenRefresh({ meta, store, appId, appSecret, fetcher = fetch, intervalMs = 24 * 60 * 60 * 1000 }) {
+  const run = () => maybeRefreshToken({ meta, store, appId, appSecret, fetcher });
   void run();
   const timer = setInterval(run, intervalMs);
   timer.unref?.();

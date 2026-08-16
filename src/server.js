@@ -16,7 +16,7 @@ const meta = new MetaClient({ accessToken: env.META_ACCESS_TOKEN, instagramAccou
 
 const storedToken = await store.getMetaToken();
 if (storedToken?.accessToken) meta.setAccessToken(storedToken.accessToken);
-if (env.META_ACCESS_TOKEN) scheduleTokenRefresh({ meta, store });
+if (env.META_ACCESS_TOKEN) scheduleTokenRefresh({ meta, store, appId: env.META_APP_ID, appSecret: env.META_APP_SECRET });
 
 const MIN_SECRET_LENGTH = 32;
 let sessionSecret = env.SESSION_SECRET || "";

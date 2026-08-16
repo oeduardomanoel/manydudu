@@ -29,7 +29,7 @@ function wireTest(buttonId, statusId, path, fields) {
   });
 }
 
-wireTest("test-meta", "test-meta-status", "/api/setup/test-meta", ["metaAccessToken", "metaAppSecret", "instagramAccountId"]);
+wireTest("test-meta", "test-meta-status", "/api/setup/test-meta", ["metaAccessToken", "metaAppId", "metaAppSecret", "instagramAccountId"]);
 wireTest("test-supabase", "test-supabase-status", "/api/setup/test-supabase", ["supabaseUrl", "supabaseSecretKey"]);
 
 const copySqlButton = document.getElementById("copy-supabase-sql");
