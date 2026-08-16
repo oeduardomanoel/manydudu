@@ -30,6 +30,14 @@ test("needsRefresh is true with no known expiry and true when close to expiring"
   assert.equal(needsRefresh(Date.now() + 30 * 24 * 60 * 60 * 1000), false);
 });
 
+test("debugToken surfaces the Meta error's code/subcode/fbtrace_id, not just the bare message", async () => {
+  const fetcher = async () => jsonResponse({ error: { message: "An unknown error occurred", type: "OAuthException", code: 1, error_subcode: 99, fbtrace_id: "Abc123XYZ" } }, false, 400);
+  await assert.rejects(
+    debugToken("IGAALtest", "123", "secret", fetcher),
+    /An unknown error occurred.*type=OAuthException.*code=1.*subcode=99.*trace=Abc123XYZ/,
+  );
+});
+
 test("debugToken uses an app token (appId|appSecret) as access_token, never the inspected token itself", async () => {
   let capturedUrl;
   await debugToken("IGAALuserToken", "123456", "shh-secret", async (url) => { capturedUrl = url; return jsonResponse({ expires_at: 1 }); });
