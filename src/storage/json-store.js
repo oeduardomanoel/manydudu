@@ -62,7 +62,7 @@ export class JsonStore {
       const current = hasOwn(state.contacts, event.contactId)
         ? state.contacts[event.contactId]
         : { id: event.contactId, tags: [], notes: [], history: [] };
-      current.username = event.username || current.username || "instagram";
+      current.username = event.username || current.username || null;
       current.lastInteractionAt = event.at;
       current.history.unshift(event);
       current.history = current.history.slice(0, 200);

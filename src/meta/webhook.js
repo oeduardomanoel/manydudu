@@ -13,7 +13,7 @@ export function extractComments(payload) {
     for (const change of entry.changes ?? []) {
       if (change.field !== "comments" || !change.value?.id) continue;
       comments.push({ id: String(change.value.id), text: String(change.value.text ?? ""),
-        authorId: String(change.value.from?.id ?? ""), username: String(change.value.from?.username ?? "Instagram"),
+        authorId: String(change.value.from?.id ?? ""), username: change.value.from?.username ? String(change.value.from.username) : null,
         mediaId: String(change.value.media?.id ?? "") });
     }
   }

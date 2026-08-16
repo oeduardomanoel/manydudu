@@ -23,6 +23,16 @@ test("extracts comment changes from Instagram webhook payload", () => {
   }]);
 });
 
+test("extracts a comment with a null username when Instagram doesn't send one", () => {
+  const payload = { entry: [{ changes: [{ field: "comments", value: {
+    id: "comment-2", text: "Quero", from: { id: "user-2" },
+    media: { id: "media-1" }
+  } }] }] };
+  assert.deepEqual(extractComments(payload), [{
+    id: "comment-2", text: "Quero", authorId: "user-2", username: null, mediaId: "media-1"
+  }]);
+});
+
 test("extracts an inbound Instagram direct message", () => {
   const payload = { entry: [{ id: "ig-account", messaging: [{ sender: { id: "person-1" }, recipient: { id: "ig-account" },
     timestamp: 123, message: { mid: "message-1", text: "Pode mandar" } }] }] };

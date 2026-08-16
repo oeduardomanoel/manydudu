@@ -267,7 +267,7 @@ export function createApp({ store, meta, config, serveStatic }) {
         const previousContact = await store.getContact(contactPath[1]);
         const contact = await store.updateContact(contactPath[1], changes);
         if (contact) {
-          const label = contact.username && contact.username !== "instagram" ? `@${contact.username}` : contact.id;
+          const label = contact.username ? `@${contact.username}` : contact.id;
           void maybeNotifyStageChange(store, "contact", contact.id, label, previousContact?.stage, contact);
         }
         return contact ? json(response, 200, contact) : json(response, 404, { error: "Contato não encontrado." });
@@ -402,15 +402,24 @@ export function createApp({ store, meta, config, serveStatic }) {
 export async function processComments(comments, store, meta) {
   for (const comment of comments) {
     if (!(await store.claimEvent(comment.id))) continue;
-    if (comment.authorId) await store.recordContactEvent({ contactId: comment.authorId, username: comment.username,
+    let username = comment.username || null;
+    if (!username && comment.authorId) {
+      const existing = await store.getContact(comment.authorId);
+      username = existing?.username || null;
+      if (!username) {
+        try { username = (await meta.getUserProfile(comment.authorId)).username || null; }
+        catch { username = null; }
+      }
+    }
+    if (comment.authorId) await store.recordContactEvent({ contactId: comment.authorId, username,
       type: "comment", text: comment.text, mediaId: comment.mediaId, at: new Date().toISOString() });
     if (comment.authorId && await store.isContactPaused(comment.authorId)) {
-      await store.log({ id: comment.id, username: comment.username, text: comment.text, mediaId: comment.mediaId,
+      await store.log({ id: comment.id, username, text: comment.text, mediaId: comment.mediaId,
         status: "ignored", reason: "human_takeover", at: new Date().toISOString() });
       continue;
     }
     const { rules, activity = [] } = await store.read(); const rule = findMatchingRule(comment.text, rules, comment.mediaId);
-    const context = { id: comment.id, username: comment.username, text: comment.text, mediaId: comment.mediaId, at: new Date().toISOString() };
+    const context = { id: comment.id, username, text: comment.text, mediaId: comment.mediaId, at: new Date().toISOString() };
     if (!rule) { await store.log({ ...context, status: "ignored" }); continue; }
     if (comment.authorId && ["private", "both"].includes(rule.responseMode)) {
       const contact = await store.getContact(comment.authorId);
@@ -423,7 +432,7 @@ export async function processComments(comments, store, meta) {
       let privateResult = null;
       if (["private", "both"].includes(rule.responseMode)) {
         privateResult = await meta.reply(comment.id, rule.reply, "private");
-        if (comment.authorId) await store.recordContactEvent({ contactId: comment.authorId, username: comment.username,
+        if (comment.authorId) await store.recordContactEvent({ contactId: comment.authorId, username,
           type: "outgoing_rule", text: rule.reply, ruleId: rule.id, at: new Date().toISOString() });
       }
       if (rule.followUpEnabled && privateResult?.recipient_id) await store.setPendingDelivery(String(privateResult.recipient_id), {
@@ -453,12 +462,12 @@ async function processMessages(messages, store, meta) {
   for (const message of messages) {
     if (!(await store.claimEvent(message.id))) continue;
     const existing = await store.getContact(message.senderId);
-    let username = existing?.username && existing.username !== "instagram" ? existing.username : null;
+    let username = existing?.username || null;
     if (!username) {
       try { username = (await meta.getUserProfile(message.senderId)).username || null; }
       catch { username = null; }
     }
-    await store.recordContactEvent({ contactId: message.senderId, username: username || "instagram", type: message.payload ? "postback" : "message",
+    await store.recordContactEvent({ contactId: message.senderId, username, type: message.payload ? "postback" : "message",
       text: message.text, at: new Date(message.timestamp).toISOString() });
     if (await store.isContactPaused(message.senderId)) continue;
     const delivery = await store.getPendingDelivery(message.senderId);
@@ -470,7 +479,7 @@ async function processMessages(messages, store, meta) {
         if (!profile.is_user_follow_business) {
           await meta.sendFollowGate(message.senderId, { text: delivery.followPrompt, profileUrl: delivery.profileUrl,
             followButtonTitle: delivery.followButtonTitle, confirmFollowTitle: delivery.confirmFollowTitle });
-          await store.log({ id: message.id, status: "waiting_follow", ruleId: delivery.ruleId, username: profile.username || "instagram",
+          await store.log({ id: message.id, status: "waiting_follow", ruleId: delivery.ruleId, username: profile.username || username,
             text: "Aguardando a pessoa seguir o perfil", rule: delivery.ruleName, mediaId: delivery.mediaId, at: new Date().toISOString() });
           continue;
         }
@@ -478,10 +487,10 @@ async function processMessages(messages, store, meta) {
       if (delivery.deliveryStyle === "button") await meta.sendLinkButton(message.senderId, delivery.text, delivery.buttonTitle, delivery.url);
       else await meta.sendDirect(message.senderId, `${delivery.text}\n\n${delivery.url}`);
       await store.consumePendingDelivery(message.senderId);
-      await store.log({ id: message.id, status: "delivered", ruleId: delivery.ruleId, username: "instagram", text: "Link entregue após resposta",
+      await store.log({ id: message.id, status: "delivered", ruleId: delivery.ruleId, username, text: "Link entregue após resposta",
         rule: delivery.ruleName, mediaId: delivery.mediaId, at: new Date().toISOString() });
     } catch (error) {
-      await store.log({ id: message.id, status: "failed", ruleId: delivery.ruleId, username: "instagram", text: "Falha ao entregar link",
+      await store.log({ id: message.id, status: "failed", ruleId: delivery.ruleId, username, text: "Falha ao entregar link",
         rule: delivery.ruleName, error: error.message, at: new Date().toISOString() });
     }
   }

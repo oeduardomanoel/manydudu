@@ -53,3 +53,58 @@ test("does not resend the same message text to a contact within 24h, even from a
   assert.equal(logs[0].status, "ignored");
   assert.equal(logs[0].reason, "fatigue_guard");
 });
+
+test("resolves a real username from the Meta API when the webhook payload has none", async () => {
+  const recorded = [];
+  let profileCalls = 0;
+  const store = {
+    claimEvent: async () => true,
+    recordContactEvent: async (event) => recorded.push(event),
+    isContactPaused: async () => false,
+    getContact: async () => null,
+    read: async () => ({ rules: [], activity: [] }),
+    log: async () => {},
+  };
+  const meta = { getUserProfile: async () => { profileCalls++; return { username: "resolvida" }; } };
+
+  await processComments([{ id: "comment-3", authorId: "person-2", username: null, text: "oi", mediaId: "reel-1" }], store, meta);
+
+  assert.equal(profileCalls, 1);
+  assert.equal(recorded[0].username, "resolvida");
+});
+
+test("reuses the already-known contact username instead of calling the Meta API again", async () => {
+  const recorded = [];
+  let profileCalls = 0;
+  const store = {
+    claimEvent: async () => true,
+    recordContactEvent: async (event) => recorded.push(event),
+    isContactPaused: async () => false,
+    getContact: async () => ({ username: "ja-conhecido", history: [] }),
+    read: async () => ({ rules: [], activity: [] }),
+    log: async () => {},
+  };
+  const meta = { getUserProfile: async () => { profileCalls++; return { username: "nunca-deveria-vir" }; } };
+
+  await processComments([{ id: "comment-4", authorId: "person-3", username: null, text: "oi", mediaId: "reel-1" }], store, meta);
+
+  assert.equal(profileCalls, 0);
+  assert.equal(recorded[0].username, "ja-conhecido");
+});
+
+test("falls back to a null username when the Meta API lookup fails", async () => {
+  const recorded = [];
+  const store = {
+    claimEvent: async () => true,
+    recordContactEvent: async (event) => recorded.push(event),
+    isContactPaused: async () => false,
+    getContact: async () => null,
+    read: async () => ({ rules: [], activity: [] }),
+    log: async () => {},
+  };
+  const meta = { getUserProfile: async () => { throw new Error("sem permissão"); } };
+
+  await processComments([{ id: "comment-5", authorId: "person-4", username: null, text: "oi", mediaId: "reel-1" }], store, meta);
+
+  assert.equal(recorded[0].username, null);
+});

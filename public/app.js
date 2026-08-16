@@ -4,7 +4,8 @@ import { checkOnboarding } from "/onboarding.js";
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const truncate = (value = "", length = 80) => value.length > length ? `${value.slice(0, length)}…` : value;
-const contactLabel = (contact) => contact.username && contact.username !== "instagram" ? `@${contact.username}` : `Contato sem @ · ${contact.id.slice(-6)}`;
+const contactLabel = (contact) => contact.username ? `@${contact.username}` : `Perfil sem nome · ${contact.id.slice(-6)}`;
+const initialsOf = (value) => (value || "IG").trim().slice(0, 2).toUpperCase();
 const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [] };
 const PIPELINE_STAGES = [["novo", "Novo"], ["contatado", "Contatado"], ["qualificado", "Qualificado"], ["cliente", "Cliente"], ["perdido", "Perdido"]];
 let pipelineOrigin = "all";
@@ -123,14 +124,14 @@ function renderModeration() {
   const filter = $("#moderation-filter").value;
   const comments = state.moderation.filter((comment) => (filter === "all" || (filter === "hidden") === Boolean(comment.hidden)) &&
     (!query || `${comment.text} ${comment.from?.username || ""}`.toLowerCase().includes(query))).slice(0, 100);
-  $("#moderation-list").innerHTML = comments.length ? comments.map((comment) => `<article class="moderation-comment ${comment.hidden ? "is-hidden" : ""}" data-comment="${escapeHtml(comment.id)}"><img src="${escapeHtml(comment.mediaThumbnail)}" alt=""><div class="moderation-copy"><div><strong>@${escapeHtml(comment.from?.username || "instagram")}</strong><time>${comment.created_time ? new Date(comment.created_time).toLocaleString("pt-BR") : ""}</time></div><p>${escapeHtml(comment.text)}</p><small>${escapeHtml(truncate(comment.mediaCaption, 75))}</small><form class="comment-reply"><input name="message" maxlength="1000" required placeholder="Responder publicamente..."><button class="primary compact" type="submit">Responder</button></form></div><button class="hide-comment ${comment.hidden ? "active" : ""}" data-hide="${escapeHtml(comment.id)}">${comment.hidden ? "Restaurar" : "Ocultar"}</button></article>`).join("") : '<p class="empty">Nenhum comentário neste filtro.</p>';
+  $("#moderation-list").innerHTML = comments.length ? comments.map((comment) => `<article class="moderation-comment ${comment.hidden ? "is-hidden" : ""}" data-comment="${escapeHtml(comment.id)}"><img src="${escapeHtml(comment.mediaThumbnail)}" alt=""><div class="moderation-copy"><div><strong>${comment.from?.username ? `@${escapeHtml(comment.from.username)}` : "Perfil sem nome"}</strong><time>${comment.created_time ? new Date(comment.created_time).toLocaleString("pt-BR") : ""}</time></div><p>${escapeHtml(comment.text)}</p><small>${escapeHtml(truncate(comment.mediaCaption, 75))}</small><form class="comment-reply"><input name="message" maxlength="1000" required placeholder="Responder publicamente..."><button class="primary compact" type="submit">Responder</button></form></div><button class="hide-comment ${comment.hidden ? "active" : ""}" data-hide="${escapeHtml(comment.id)}">${comment.hidden ? "Restaurar" : "Ocultar"}</button></article>`).join("") : '<p class="empty">Nenhum comentário neste filtro.</p>';
 }
 
 function renderContacts(query = "") {
   const normalized = query.trim().toLowerCase();
   const contacts = state.contacts.filter((contact) => !normalized || [contact.username, ...(contact.tags || []), contact.history?.[0]?.text]
     .some((value) => String(value || "").toLowerCase().includes(normalized)));
-  $("#contacts-list").innerHTML = contacts.length ? contacts.map((contact) => `<button class="contact-row ${contact.id === state.selectedContactId ? "active" : ""}" data-contact="${escapeHtml(contact.id)}"><span class="contact-avatar">${escapeHtml((contact.username && contact.username !== "instagram" ? contact.username : "IG").slice(0, 2).toUpperCase())}</span><span><strong>${escapeHtml(contactLabel(contact))}</strong><small>${escapeHtml(truncate(contact.history?.[0]?.text || "Interação registrada", 42))}</small></span><i>${contact.interactionCount}</i></button>`).join("") : '<p class="empty">Nenhum contato encontrado.</p>';
+  $("#contacts-list").innerHTML = contacts.length ? contacts.map((contact) => `<button class="contact-row ${contact.id === state.selectedContactId ? "active" : ""}" data-contact="${escapeHtml(contact.id)}"><span class="contact-avatar">${escapeHtml(initialsOf(contact.username))}</span><span><strong>${escapeHtml(contactLabel(contact))}</strong><small>${escapeHtml(truncate(contact.history?.[0]?.text || "Interação registrada", 42))}</small></span><i>${contact.interactionCount}</i></button>`).join("") : '<p class="empty">Nenhum contato encontrado.</p>';
 }
 
 async function openContact(contactId) {
@@ -251,9 +252,13 @@ function renderPipelineBoard(items) {
     return `<div class="pipeline-column" data-stage="${key}">
       <div class="pipeline-column-head"><h3>${escapeHtml(label)}</h3><span>${cards.length}</span></div>
       <div class="pipeline-cards">${cards.length ? cards.map((item) => `<article class="pipeline-card" draggable="true" data-key="${escapeHtml(item.key)}">
-        <strong>${escapeHtml(item.label)}</strong>
+        <div class="pipeline-card-top">
+          <span class="pipeline-card-avatar avatar-${item.kind}">${escapeHtml(item.kind === "lead" ? initialsOf(item.label) : initialsOf(item.raw.username))}</span>
+          <strong>${escapeHtml(item.label)}</strong>
+          <span class="score-badge ${scoreTier(item.score)}" title="Score de lead quente">🔥 ${item.score}</span>
+        </div>
         <small>${escapeHtml(truncate(item.detail || "", 60))}</small>
-        <div class="card-badges"><span class="score-badge ${scoreTier(item.score)}" title="Score de lead quente">🔥 ${item.score}</span><span class="origin-badge">${escapeHtml(item.origin)}</span>${item.nextActionAt ? `<span class="next-action-badge ${isOverdue(item.nextActionAt) ? "overdue" : ""}">${new Date(`${item.nextActionAt}T00:00:00`).toLocaleDateString("pt-BR")}</span>` : ""}</div>
+        <div class="card-badges">${item.kind === "lead" ? `<span class="origin-badge">${escapeHtml(item.origin)}</span>` : ""}${item.nextActionAt ? `<span class="next-action-badge ${isOverdue(item.nextActionAt) ? "overdue" : ""}">${new Date(`${item.nextActionAt}T00:00:00`).toLocaleDateString("pt-BR")}</span>` : ""}</div>
       </article>`).join("") : '<p class="empty">Vazio</p>'}</div>
     </div>`;
   }).join("");
@@ -365,7 +370,7 @@ function openPipelineDetail(key) {
   const item = pipelineItemsCache.find((entry) => entry.key === key);
   if (!item) return;
   const whatsapp = item.kind === "lead" ? whatsappLink(item.raw.whatsapp)
-    : item.raw.username && item.raw.username !== "instagram" ? `https://ig.me/m/${encodeURIComponent(item.raw.username)}` : null;
+    : item.raw.username ? `https://ig.me/m/${encodeURIComponent(item.raw.username)}` : null;
   const fields = item.kind === "lead"
     ? [["WhatsApp", escapeHtml(item.raw.whatsapp)], ["E-mail", `<a href="mailto:${escapeHtml(item.raw.email)}">${escapeHtml(item.raw.email)}</a>`], ["Campanha", escapeHtml(item.origin)], ["Capturado em", new Date(item.raw.createdAt).toLocaleString("pt-BR")]]
     : [["Instagram", escapeHtml(contactLabel(item.raw))], ["Segue o perfil", item.raw.follower ? "Sim" : "Não verificado"], ["Última interação", new Date(item.raw.lastInteractionAt).toLocaleString("pt-BR")]];
@@ -418,7 +423,7 @@ async function openMedia(mediaId) {
   $("#media-dialog").showModal();
   try {
     const result = await request(`/api/media/${media.id}/comments`);
-    $("#detail-comments").innerHTML = result.comments.length ? result.comments.map((comment) => `<article class="comment"><span class="comment-avatar">${escapeHtml((comment.from?.username || "IG").slice(0, 2).toUpperCase())}</span><div><strong>@${escapeHtml(comment.from?.username || "instagram")}</strong><p>${escapeHtml(comment.text)}</p><time>${comment.created_time ? new Date(comment.created_time).toLocaleString("pt-BR") : ""}</time></div></article>`).join("") : '<p class="empty">Este conteúdo ainda não tem comentários visíveis.</p>';
+    $("#detail-comments").innerHTML = result.comments.length ? result.comments.map((comment) => `<article class="comment"><span class="comment-avatar">${escapeHtml(initialsOf(comment.from?.username))}</span><div><strong>${comment.from?.username ? `@${escapeHtml(comment.from.username)}` : "Perfil sem nome"}</strong><p>${escapeHtml(comment.text)}</p><time>${comment.created_time ? new Date(comment.created_time).toLocaleString("pt-BR") : ""}</time></div></article>`).join("") : '<p class="empty">Este conteúdo ainda não tem comentários visíveis.</p>';
   } catch (error) {
     $("#detail-comments").innerHTML = `<div class="media-error">${escapeHtml(error.message)}</div>`;
   }
