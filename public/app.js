@@ -221,6 +221,8 @@ function openCampaignDialog(campaign = null) {
   form.elements.slug.readOnly = Boolean(campaign);
   form.elements.slug.placeholder = campaign ? "" : "gerado a partir do título";
   form.elements.active.checked = campaign ? campaign.active : true;
+  form.elements.interestLabel.value = campaign?.interestLabel || "";
+  form.elements.niches.value = (campaign?.niches || []).join(", ");
   campaignEditor.setHtml(campaign?.contentHtml || "");
   $("#campaign-dialog-mode").textContent = campaign ? "EDITAR CAMPANHA" : "NOVA CAMPANHA";
   $("#save-campaign").textContent = campaign ? "Salvar alterações →" : "Criar campanha →";
@@ -712,7 +714,8 @@ $("#campaign-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   $("#campaign-form-error").textContent = "";
-  const payload = { title: form.elements.title.value, slug: form.elements.slug.value || undefined, active: form.elements.active.checked, contentHtml: campaignEditor.getHtml() };
+  const niches = form.elements.niches.value.split(",").map((niche) => niche.trim()).filter(Boolean);
+  const payload = { title: form.elements.title.value, slug: form.elements.slug.value || undefined, active: form.elements.active.checked, contentHtml: campaignEditor.getHtml(), interestLabel: form.elements.interestLabel.value, niches };
   const slug = form.dataset.slug;
   try {
     await request(slug ? `/api/campaigns/${slug}` : "/api/campaigns", { method: slug ? "PATCH" : "POST", body: JSON.stringify(payload) });

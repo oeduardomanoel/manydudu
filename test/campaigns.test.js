@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCampaign, createLead, updateCampaign } from "../src/domain/campaigns.js";
+import { createCampaign, createLead, DEFAULT_INTEREST_LABEL, DEFAULT_NICHES, updateCampaign } from "../src/domain/campaigns.js";
 import { AppError } from "../src/util/errors.js";
 
 test("createCampaign slugifies the title when no slug is given", () => {
@@ -19,6 +19,38 @@ test("createCampaign rejects missing content", () => {
 
 test("createCampaign rejects an invalid custom slug", () => {
   assert.throws(() => createCampaign({ title: "Guia", slug: "a", contentHtml: "<p>x</p>" }), AppError);
+});
+
+test("createCampaign falls back to the default niches and interest label when not given", () => {
+  const campaign = createCampaign({ title: "Guia", contentHtml: "<p>x</p>" });
+  assert.deepEqual(campaign.niches, DEFAULT_NICHES);
+  assert.equal(campaign.interestLabel, DEFAULT_INTEREST_LABEL);
+});
+
+test("createCampaign accepts a custom niche list and always keeps an Outro option", () => {
+  const campaign = createCampaign({ title: "Guia", contentHtml: "<p>x</p>", niches: ["Imóveis", "Consórcio"] });
+  assert.deepEqual(campaign.niches, ["Imóveis", "Consórcio", "Outro"]);
+});
+
+test("createCampaign doesn't duplicate Outro if the admin already included it", () => {
+  const campaign = createCampaign({ title: "Guia", contentHtml: "<p>x</p>", niches: ["Fitness", "Outro"] });
+  assert.deepEqual(campaign.niches, ["Fitness", "Outro"]);
+});
+
+test("createCampaign accepts a custom interest label", () => {
+  const campaign = createCampaign({ title: "Guia", contentHtml: "<p>x</p>", interestLabel: "O que você mais precisa resolver agora?" });
+  assert.equal(campaign.interestLabel, "O que você mais precisa resolver agora?");
+});
+
+test("createCampaign rejects an interest label that's too long", () => {
+  assert.throws(() => createCampaign({ title: "Guia", contentHtml: "<p>x</p>", interestLabel: "a".repeat(201) }), AppError);
+});
+
+test("updateCampaign preserves a custom niche list and interest label", () => {
+  const existing = createCampaign({ title: "Guia", contentHtml: "<p>x</p>", niches: ["Fitness"], interestLabel: "Qual seu objetivo?" });
+  const updated = updateCampaign(existing, { title: "Guia", contentHtml: "<p>x</p>", niches: existing.niches, interestLabel: existing.interestLabel });
+  assert.deepEqual(updated.niches, ["Fitness", "Outro"]);
+  assert.equal(updated.interestLabel, "Qual seu objetivo?");
 });
 
 test("updateCampaign keeps the original slug and id", () => {

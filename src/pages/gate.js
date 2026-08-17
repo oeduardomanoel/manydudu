@@ -1,6 +1,5 @@
 import { escapeHtml } from "../util/html.js";
-
-const NICHES = ["Estética", "Saúde e bem-estar", "Educação", "Imobiliário", "Coach / Mentoria", "E-commerce", "Serviços locais", "Outro"];
+import { DEFAULT_INTEREST_LABEL, DEFAULT_NICHES } from "../domain/campaigns.js";
 
 const HEAD = (title) => `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)}</title>
@@ -14,6 +13,8 @@ export function renderNotFound() {
 }
 
 export function renderGatePage(campaign) {
+  const niches = campaign.niches?.length ? campaign.niches : DEFAULT_NICHES;
+  const interestLabel = campaign.interestLabel || DEFAULT_INTEREST_LABEL;
   return `<!doctype html><html lang="pt-BR"><head>${HEAD(campaign.title)}</head><body class="gate-body">
   <div class="gate-shell">
     <div class="gate-brand-pane"><p class="eyebrow">EDUARDO SANTOS</p><p class="gate-marketing">Automação que conversa,<br><em>conteúdo que entrega.</em></p><span class="gate-handle">@eduardosantos.ia</span></div>
@@ -26,10 +27,10 @@ export function renderGatePage(campaign) {
         <label>WhatsApp<input name="whatsapp" required maxlength="30" placeholder="(11) 91234-5678"></label>
         <label>E-mail<input name="email" type="email" required maxlength="160" placeholder="voce@email.com"></label>
         <fieldset class="gate-niches"><legend>Qual seu nicho?</legend>
-          <div class="pill-group">${NICHES.map((niche) => `<label class="pill"><input type="checkbox" name="niches" value="${escapeHtml(niche)}"><span>${escapeHtml(niche)}</span></label>`).join("")}</div>
+          <div class="pill-group">${niches.map((niche) => `<label class="pill"><input type="checkbox" name="niches" value="${escapeHtml(niche)}"><span>${escapeHtml(niche)}</span></label>`).join("")}</div>
           <input name="nicheOther" class="niche-other" hidden maxlength="120" placeholder="Qual é o seu nicho?">
         </fieldset>
-        <label>Qual automação te interessa agora?<textarea name="automationInterest" required maxlength="600" placeholder="Ex.: responder comentários e enviar material automaticamente"></textarea></label>
+        <label>${escapeHtml(interestLabel)}<textarea name="automationInterest" required maxlength="600" placeholder="Ex.: responder comentários e enviar material automaticamente"></textarea></label>
         <input type="hidden" name="slug" value="${escapeHtml(campaign.slug)}">
         <label class="hp-field" aria-hidden="true">Empresa<input name="company" tabindex="-1" autocomplete="off"></label>
         <button class="primary wide" type="submit">Quero acessar →</button>

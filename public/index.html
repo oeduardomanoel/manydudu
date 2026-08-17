@@ -167,6 +167,10 @@
       </div>
       <div class="editor-body" id="campaign-editor"></div>
     </label>
+    <label>Pergunta final do formulário<input name="interestLabel" placeholder="Qual automação te interessa agora?" maxlength="200"></label>
+    <p class="hint" style="margin:-10px 0 14px">Nem toda campanha é sobre automação — troque essa pergunta pelo que faz sentido pro seu nicho (ex.: "O que você mais precisa resolver agora?").</p>
+    <label>Nichos do formulário (separados por vírgula)<input name="niches" placeholder="Estética, Saúde e bem-estar, Educação, Imobiliário, Coach / Mentoria, E-commerce, Serviços locais"></label>
+    <p class="hint" style="margin:-10px 0 14px">Deixe em branco pra usar a lista padrão. A opção "Outro" é adicionada automaticamente se você não incluir.</p>
     <label class="follow-check"><input type="checkbox" name="active" checked><span><strong>Campanha ativa</strong><small>Desative para tirar o link do ar sem apagar os dados.</small></span></label>
     <button class="primary wide" id="save-campaign" type="submit">Criar campanha →</button><p class="form-error" id="campaign-form-error" role="alert"></p>
   </form></dialog>

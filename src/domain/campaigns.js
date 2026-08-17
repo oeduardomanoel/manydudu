@@ -2,6 +2,27 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../util/errors.js";
 
 const MAX_NICHES = 8;
+const MAX_CUSTOM_NICHES = 12;
+const MAX_NICHE_LENGTH = 40;
+
+export const DEFAULT_NICHES = ["Estética", "Saúde e bem-estar", "Educação", "Imobiliário", "Coach / Mentoria", "E-commerce", "Serviços locais", "Outro"];
+export const DEFAULT_INTEREST_LABEL = "Qual automação te interessa agora?";
+
+function normalizeNiches(input) {
+  if (!Array.isArray(input) || !input.length) return [...DEFAULT_NICHES];
+  const niches = [...new Set(input.map((item) => String(item).trim()).filter(Boolean))]
+    .slice(0, MAX_CUSTOM_NICHES)
+    .map((niche) => niche.slice(0, MAX_NICHE_LENGTH));
+  if (!niches.some((niche) => niche.toLowerCase() === "outro")) niches.push("Outro");
+  return niches;
+}
+
+function normalizeInterestLabel(input) {
+  const label = String(input ?? "").trim();
+  if (!label) return DEFAULT_INTEREST_LABEL;
+  if (label.length > 200) throw new AppError("A pergunta final pode ter no máximo 200 caracteres.");
+  return label;
+}
 
 const DIACRITICS = /[̀-ͯ]/g;
 
@@ -27,6 +48,8 @@ export function createCampaign(input) {
     slug,
     title,
     contentHtml,
+    niches: normalizeNiches(input.niches),
+    interestLabel: normalizeInterestLabel(input.interestLabel),
     active: input.active !== false,
     createdAt: new Date().toISOString(),
   };
@@ -43,6 +66,8 @@ export function updateCampaign(existing, input) {
     ...existing,
     title,
     contentHtml,
+    niches: normalizeNiches(input.niches),
+    interestLabel: normalizeInterestLabel(input.interestLabel),
     active: input.active !== false,
     updatedAt: new Date().toISOString(),
   };
