@@ -1,25 +1,42 @@
 import { escapeHtml } from "../util/html.js";
 import { DEFAULT_INTEREST_LABEL, DEFAULT_NICHES } from "../domain/campaigns.js";
 
-const HEAD = (title) => `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(title)}</title>
-<link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/theme.css"><link rel="stylesheet" href="/campaign.css">`;
+const THEME_FILES = { azul: "/theme-azul.css", verde: "/theme-verde.css", roxo: "/theme-roxo.css" };
+const DEFAULT_TAGLINE = "Automação que conversa, conteúdo que entrega.";
+const DEFAULT_BRAND_NAME = "Minha Marca";
 
-export function renderNotFound() {
-  return `<!doctype html><html lang="pt-BR"><head>${HEAD("Conteúdo não encontrado")}</head><body class="gate-body">
-  <div class="gate-shell"><div class="gate-card"><p class="eyebrow">EDUARDO SANTOS · @eduardosantos.ia</p>
+function resolveBrand(settings = {}) {
+  return {
+    name: settings.brandName || DEFAULT_BRAND_NAME,
+    handle: settings.brandHandle || "",
+    tagline: settings.brandTagline || DEFAULT_TAGLINE,
+    themeHref: THEME_FILES[settings.brandTemplate] || "/theme.css",
+  };
+}
+
+const HEAD = (title, themeHref) => `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="${escapeHtml(themeHref)}"><link rel="stylesheet" href="/campaign.css">`;
+
+const eyebrow = (brand) => brand.handle ? `${escapeHtml(brand.name)} · @${escapeHtml(brand.handle)}` : escapeHtml(brand.name);
+
+export function renderNotFound(settings = {}) {
+  const brand = resolveBrand(settings);
+  return `<!doctype html><html lang="pt-BR"><head>${HEAD("Conteúdo não encontrado", brand.themeHref)}</head><body class="gate-body">
+  <div class="gate-shell"><div class="gate-card"><p class="eyebrow">${eyebrow(brand)}</p>
   <h1>Esse conteúdo não está mais disponível.</h1><p class="gate-sub">Confira o link ou volte para o Instagram.</p></div></div>
   </body></html>`;
 }
 
-export function renderGatePage(campaign) {
+export function renderGatePage(campaign, settings = {}) {
+  const brand = resolveBrand(settings);
   const niches = campaign.niches?.length ? campaign.niches : DEFAULT_NICHES;
   const interestLabel = campaign.interestLabel || DEFAULT_INTEREST_LABEL;
-  return `<!doctype html><html lang="pt-BR"><head>${HEAD(campaign.title)}</head><body class="gate-body">
+  return `<!doctype html><html lang="pt-BR"><head>${HEAD(campaign.title, brand.themeHref)}</head><body class="gate-body">
   <div class="gate-shell">
-    <div class="gate-brand-pane"><p class="eyebrow">EDUARDO SANTOS</p><p class="gate-marketing">Automação que conversa,<br><em>conteúdo que entrega.</em></p><span class="gate-handle">@eduardosantos.ia</span></div>
+    <div class="gate-brand-pane"><p class="eyebrow">${escapeHtml(brand.name)}</p><p class="gate-marketing">${escapeHtml(brand.tagline)}</p>${brand.handle ? `<span class="gate-handle">@${escapeHtml(brand.handle)}</span>` : ""}</div>
     <div class="gate-card">
-      <p class="eyebrow">EDUARDO SANTOS · @eduardosantos.ia</p>
+      <p class="eyebrow">${eyebrow(brand)}</p>
       <h1>${escapeHtml(campaign.title)}</h1>
       <p class="gate-sub">Preencha os dados abaixo para liberar o conteúdo.</p>
       <form id="lead-form" class="gate-form">
@@ -42,14 +59,15 @@ export function renderGatePage(campaign) {
   </body></html>`;
 }
 
-export function renderContentPage(campaign) {
-  return `<!doctype html><html lang="pt-BR"><head>${HEAD(campaign.title)}</head><body class="gate-body">
+export function renderContentPage(campaign, settings = {}) {
+  const brand = resolveBrand(settings);
+  return `<!doctype html><html lang="pt-BR"><head>${HEAD(campaign.title, brand.themeHref)}</head><body class="gate-body">
   <div class="gate-shell gate-shell--content">
     <div class="gate-card gate-card--content">
-      <p class="eyebrow">EDUARDO SANTOS · @eduardosantos.ia</p>
+      <p class="eyebrow">${eyebrow(brand)}</p>
       <h1>${escapeHtml(campaign.title)}</h1>
       <div class="gate-content">${campaign.contentHtml}</div>
-      <a class="gate-instagram" href="https://www.instagram.com/eduardosantos.ia/" target="_blank" rel="noopener">Seguir @eduardosantos.ia →</a>
+      ${brand.handle ? `<a class="gate-instagram" href="https://www.instagram.com/${encodeURIComponent(brand.handle)}/" target="_blank" rel="noopener">Seguir @${escapeHtml(brand.handle)} →</a>` : ""}
     </div>
   </div>
   </body></html>`;

@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ManyDudu · Automação que conversa</title><link rel="stylesheet" href="/styles.css?v=4c370c8"><link rel="stylesheet" href="/theme.css?v=4c370c8">
+  <title id="page-title">ManyDudu · Automação que conversa</title><link rel="stylesheet" href="/styles.css?v=4c370c8"><link rel="stylesheet" id="theme-link" href="/theme.css?v=4c370c8">
 </head>
 <body>
   <div class="grain"></div>
   <aside>
-    <a class="brand" href="/"><span>MD</span> manydudu</a>
+    <a class="brand" href="/" id="brand-link"><span id="brand-mark" class="brand-mark">MD</span> <span id="brand-name">manydudu</span></a>
     <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="inbox" data-scroll="top">✉ <span>DM</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button><button data-view="health" data-scroll="health">♡ <span>Saúde</span></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button></nav>
     <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
   </aside>
@@ -108,6 +108,34 @@
         <button class="primary compact" type="submit">Salvar</button>
       </form>
       <p class="form-error" id="capi-status" role="alert" style="text-align:left;margin-top:8px"></p>
+    </section>
+    <section class="media-section" id="brand-section">
+      <div class="section-head"><div><p class="eyebrow">DEIXE COM A SUA CARA</p><h2>Marca do painel e das páginas públicas</h2></div></div>
+      <p class="hint">Troca o nome, @ do Instagram, frase e cor que aparecem no painel, no login e nas páginas de campanha (as que seus leads veem). Sem isso configurado, aparece um nome genérico.</p>
+      <form id="brand-form">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <label style="flex:1;min-width:200px;margin:0 0 12px"><span style="display:block;margin-bottom:6px;font-size:11px;color:var(--muted)">Nome da marca/negócio</span><input name="brandName" placeholder="Ex.: Estúdio Ana Criativa" maxlength="60" style="width:100%"></label>
+          <label style="flex:1;min-width:200px;margin:0 0 12px"><span style="display:block;margin-bottom:6px;font-size:11px;color:var(--muted)">@ do Instagram</span><input name="brandHandle" placeholder="seuusuario" maxlength="60" style="width:100%"></label>
+        </div>
+        <label style="margin:0 0 14px;display:block"><span style="display:block;margin-bottom:6px;font-size:11px;color:var(--muted)">Frase de efeito</span><input name="brandTagline" placeholder="Automação que conversa, conteúdo que entrega." maxlength="140" style="width:100%"></label>
+        <div style="margin:0 0 16px">
+          <span style="display:block;margin-bottom:8px;font-size:11px;color:var(--muted)">Cor de destaque</span>
+          <div id="brand-template-picker" style="display:flex;gap:10px;flex-wrap:wrap">
+            <button type="button" class="template-swatch" data-template="laranja" style="--swatch:#ff5a1f" title="Laranja (padrão)"></button>
+            <button type="button" class="template-swatch" data-template="azul" style="--swatch:#1f6aff" title="Azul"></button>
+            <button type="button" class="template-swatch" data-template="verde" style="--swatch:#1fffaa" title="Verde"></button>
+            <button type="button" class="template-swatch" data-template="roxo" style="--swatch:#631fff" title="Roxo"></button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;margin:0 0 16px">
+          <img id="brand-logo-preview" alt="" style="width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid var(--line);background:var(--surface2)">
+          <button type="button" class="icon-btn" id="brand-logo-btn">⇧ Trocar logo</button>
+          <input type="file" id="brand-logo-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+          <span class="hint" style="margin:0">PNG, JPG, WEBP ou SVG, até 200KB.</span>
+        </div>
+        <button class="primary compact" type="submit">Salvar marca</button>
+      </form>
+      <p class="form-error" id="brand-status" role="alert" style="text-align:left;margin-top:8px"></p>
     </section>
     </div>
     <div id="view-audit" class="view" hidden>

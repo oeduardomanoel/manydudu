@@ -10,6 +10,25 @@ const initialsOf = (value) => (value || "IG").trim().slice(0, 2).toUpperCase();
 // via outgoing_rule) não conta como contato de DM até a pessoa responder de volta.
 const DM_EVENT_TYPES = new Set(["message", "postback", "outgoing"]);
 const hasDmHistory = (contact) => (contact.history || []).some((event) => DM_EVENT_TYPES.has(event.type));
+const THEME_FILES = { azul: "/theme-azul.css", verde: "/theme-verde.css", roxo: "/theme-roxo.css" };
+
+function applyBranding(settings) {
+  if (settings.brandName) {
+    document.getElementById("page-title").textContent = `${settings.brandName} · Automação que conversa`;
+    document.getElementById("brand-name").textContent = settings.brandName;
+  }
+  if (settings.brandLogoUrl) {
+    let mark = document.getElementById("brand-mark");
+    if (mark.tagName !== "IMG") {
+      const img = document.createElement("img");
+      img.id = "brand-mark"; img.className = "brand-mark"; img.alt = "";
+      mark.replaceWith(img);
+      mark = img;
+    }
+    mark.src = settings.brandLogoUrl;
+  }
+  document.getElementById("theme-link").href = THEME_FILES[settings.brandTemplate] || "/theme.css?v=4c370c8";
+}
 const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [] };
 const PIPELINE_STAGES = [["novo", "Novo"], ["contatado", "Contatado"], ["qualificado", "Qualificado"], ["cliente", "Cliente"], ["perdido", "Perdido"]];
 let pipelineOrigin = "all";
@@ -336,6 +355,14 @@ async function loadWebhookSettings() {
   $("#webhook-form").elements.outboundWebhookUrl.value = settings.outboundWebhookUrl || "";
   $("#capi-form").elements.metaPixelId.value = settings.metaPixelId || "";
   $("#capi-form").elements.metaCapiToken.value = settings.metaCapiToken || "";
+  $("#brand-form").elements.brandName.value = settings.brandName || "";
+  $("#brand-form").elements.brandHandle.value = settings.brandHandle || "";
+  $("#brand-form").elements.brandTagline.value = settings.brandTagline || "";
+  document.querySelectorAll("#brand-template-picker [data-template]").forEach((button) => {
+    button.classList.toggle("active", (settings.brandTemplate || "laranja") === button.dataset.template);
+  });
+  if (settings.brandLogoUrl) $("#brand-logo-preview").src = settings.brandLogoUrl;
+  applyBranding(settings);
 }
 
 $("#webhook-form").addEventListener("submit", async (event) => {
@@ -373,6 +400,42 @@ $("#capi-form").addEventListener("submit", async (event) => {
   const { metaPixelId, metaCapiToken } = event.currentTarget.elements;
   try {
     await request("/api/settings", { method: "PATCH", body: JSON.stringify({ metaPixelId: metaPixelId.value.trim(), metaCapiToken: metaCapiToken.value.trim() }) });
+    status.style.color = "var(--green)";
+    status.textContent = "Salvo ✓";
+  } catch (error) {
+    status.style.color = "var(--danger)";
+    status.textContent = error.message;
+  }
+});
+
+let selectedBrandTemplate = "laranja";
+let pendingBrandLogoUrl = null;
+document.getElementById("brand-template-picker").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-template]");
+  if (!button) return;
+  selectedBrandTemplate = button.dataset.template;
+  document.querySelectorAll("#brand-template-picker [data-template]").forEach((el) => el.classList.toggle("active", el === button));
+});
+$("#brand-logo-btn").addEventListener("click", () => $("#brand-logo-input").click());
+$("#brand-logo-input").addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 200_000) { $("#brand-status").textContent = "Logo muito grande — até 200KB."; event.target.value = ""; return; }
+  const reader = new FileReader();
+  reader.onload = () => { pendingBrandLogoUrl = reader.result; $("#brand-logo-preview").src = pendingBrandLogoUrl; };
+  reader.readAsDataURL(file);
+});
+$("#brand-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = $("#brand-status");
+  status.textContent = "";
+  const { brandName, brandHandle, brandTagline } = event.currentTarget.elements;
+  const payload = { brandName: brandName.value.trim(), brandHandle: brandHandle.value.trim(), brandTagline: brandTagline.value.trim(), brandTemplate: selectedBrandTemplate };
+  if (pendingBrandLogoUrl) payload.brandLogoUrl = pendingBrandLogoUrl;
+  try {
+    const saved = await request("/api/settings", { method: "PATCH", body: JSON.stringify(payload) });
+    pendingBrandLogoUrl = null;
+    applyBranding(saved);
     status.style.color = "var(--green)";
     status.textContent = "Salvo ✓";
   } catch (error) {

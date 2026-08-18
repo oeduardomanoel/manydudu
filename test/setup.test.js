@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { createApp } from "../src/app.js";
 
 function startTestServer(config) {
-  const server = createServer(createApp({ store: {}, meta: {}, config, serveStatic: (_req, res) => { res.writeHead(404); res.end(); } }));
+  const server = createServer(createApp({ store: { getSettings: async () => ({}) }, meta: {}, config, serveStatic: (_req, res) => { res.writeHead(404); res.end(); } }));
   return new Promise((resolve) => {
     server.listen(0, () => resolve({ server, baseUrl: `http://127.0.0.1:${server.address().port}` }));
   });
@@ -211,4 +211,24 @@ test("POST /api/setup/test-supabase rejects a URL resolving to the cloud metadat
     assert.equal(res.status, 400);
     assert.match(body.error, /bloqueado/);
   });
+});
+
+test("GET /api/branding is reachable without a session and returns the safe subset of settings", async () => {
+  const config = baseConfig({ adminPassword: "already-configured", setupToken: "" });
+  const server = createServer(createApp({
+    store: { getSettings: async () => ({ brandName: "Estúdio Ana", brandHandle: "ana", outboundWebhookUrl: "https://should-not-leak.example" }) },
+    meta: {}, config, serveStatic: (_req, res) => { res.writeHead(404); res.end(); },
+  }));
+  await new Promise((resolve) => server.listen(0, resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const res = await fetch(`${baseUrl}/api/branding`);
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(body.brandName, "Estúdio Ana");
+    assert.equal(body.brandHandle, "ana");
+    assert.equal(body.outboundWebhookUrl, undefined);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

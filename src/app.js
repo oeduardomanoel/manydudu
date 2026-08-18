@@ -53,6 +53,7 @@ function requiresAuth(pathname, method) {
   if (pathname === "/" || pathname === "/index.html") return true;
   if (!pathname.startsWith("/api/")) return false;
   if (pathname === "/api/login") return false;
+  if (pathname === "/api/branding") return false;
   if (pathname === "/api/leads" && method === "POST") return false;
   return true;
 }
@@ -71,12 +72,13 @@ export function createApp({ store, meta, config, serveStatic }) {
       const campaignPath = url.pathname.match(/^\/c\/([a-z0-9-]+)$/);
       if (request.method === "GET" && campaignPath) {
         const campaign = await store.getCampaignBySlug(campaignPath[1]);
-        if (!campaign || !campaign.active) return html(response, 404, renderNotFound());
+        if (!campaign || !campaign.active) return html(response, 404, renderNotFound(await store.getSettings()));
         const slugs = readAccessSlugs(request, config.sessionSecret);
-        return html(response, 200, slugs.includes(campaign.slug) ? renderContentPage(campaign) : renderGatePage(campaign));
+        const settings = await store.getSettings();
+        return html(response, 200, slugs.includes(campaign.slug) ? renderContentPage(campaign, settings) : renderGatePage(campaign, settings));
       }
       if (url.pathname === "/setup" || url.pathname.startsWith("/api/setup/")) {
-        if (!isSetupRequestAuthorized(request, url, config)) return html(response, 404, renderNotFound());
+        if (!isSetupRequestAuthorized(request, url, config)) return html(response, 404, renderNotFound(await store.getSettings()));
         if (isSetupRateLimited(request)) return json(response, 429, { error: "Muitas tentativas. Aguarde um pouco e tente de novo." });
         recordSetupAttempt(request);
         if (request.method === "GET" && url.pathname === "/setup") {
@@ -168,6 +170,10 @@ export function createApp({ store, meta, config, serveStatic }) {
         withCookie(response, createSessionCookie(user, config.sessionSecret, request));
         withCookie(response, createCsrfCookie(request));
         return json(response, 200, { ok: true });
+      }
+      if (request.method === "GET" && url.pathname === "/api/branding") {
+        const { brandName, brandHandle, brandTagline, brandTemplate, brandLogoUrl } = await store.getSettings();
+        return json(response, 200, { brandName, brandHandle, brandTagline, brandTemplate, brandLogoUrl });
       }
       if (requiresAuth(url.pathname, request.method) && !readSession(request, config.sessionSecret)) {
         return url.pathname.startsWith("/api/") ? json(response, 401, { error: "Sessão expirada. Faça login novamente." })

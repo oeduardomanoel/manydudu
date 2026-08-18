@@ -2,14 +2,14 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ManyDudu · Entrar</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/theme.css">
+  <title id="page-title">ManyDudu · Entrar</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" id="theme-link" href="/theme.css">
   <style>
     body{display:grid;place-items:center;min-height:100vh}
     .login-card{width:min(360px,calc(100% - 32px));padding:32px 28px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(145deg,#0d0d0c,#090908);box-shadow:var(--shadow)}
     .login-card .brand{margin-bottom:26px;padding:0}
     .login-card label{display:grid;gap:7px;margin-bottom:16px;font-size:11px;font-weight:600;color:#dce6f7}
     .login-card input{width:100%;border:1px solid var(--line);border-radius:8px;padding:12px;background:#12110f;color:var(--text);font-size:13px}
-    .login-card input:focus{border-color:#ff7138;box-shadow:0 0 0 3px #ff5a1f1c;outline:0}
+    .login-card input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--strong);outline:0}
     .login-card .wide{width:100%;margin-top:6px}
     .form-error{min-height:16px;margin:12px 0 0;color:var(--danger);font-size:11px;text-align:center}
   </style>
@@ -17,7 +17,7 @@
 <body>
   <div class="grain"></div>
   <div class="login-card">
-    <a class="brand" href="/"><span>MD</span> manydudu</a>
+    <a class="brand" href="/" id="brand-link"><span id="brand-mark" class="brand-mark">MD</span> <span id="brand-name">manydudu</span></a>
     <form id="login-form">
       <label>Usuário<input name="user" autocomplete="username" required></label>
       <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
