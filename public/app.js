@@ -29,7 +29,7 @@ function applyBranding(settings) {
   }
   document.getElementById("theme-link").href = THEME_FILES[settings.brandTemplate] || "/theme.css?v=4c370c8";
 }
-const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [] };
+const state = { media: [], rules: [], filter: "REELS", selectedMedia: null, contacts: [], selectedContactId: null, moderation: [], campaigns: [], leads: [], settings: {} };
 const PIPELINE_STAGES = [["novo", "Novo"], ["contatado", "Contatado"], ["qualificado", "Qualificado"], ["cliente", "Cliente"], ["perdido", "Perdido"]];
 let pipelineOrigin = "all";
 let pipelineSearch = "";
@@ -76,7 +76,7 @@ async function renderDashboard() {
   $("#sent-count").textContent = sent;
   $("#response-rate").textContent = handled ? `${Math.round(sent / handled * 100)}%` : "—";
   $("#rule-total").textContent = `${dashboard.rules.length} ${dashboard.rules.length === 1 ? "regra" : "regras"}`;
-  $("#connection").textContent = dashboard.configured ? "@eduardosantos.ia" : "configuração pendente";
+  $("#connection").textContent = dashboard.configured ? "Conectado ✓" : "configuração pendente";
   renderRules(dashboard.rules);
   renderActivity(dashboard.activity);
   renderKeywordSuggestions(dashboard.keywordSuggestions || []);
@@ -104,7 +104,7 @@ function renderActivity(activity) {
 }
 
 async function loadMedia() {
-  $("#media-grid").innerHTML = '<div class="media-loading">Sincronizando com @eduardosantos.ia…</div>';
+  $("#media-grid").innerHTML = '<div class="media-loading">Sincronizando com o Instagram…</div>';
   try {
     const result = await request("/api/media");
     state.media = result.media;
@@ -352,6 +352,7 @@ async function loadHealth() {
 
 async function loadWebhookSettings() {
   const settings = await request("/api/settings");
+  state.settings = settings;
   $("#webhook-form").elements.outboundWebhookUrl.value = settings.outboundWebhookUrl || "";
   $("#capi-form").elements.metaPixelId.value = settings.metaPixelId || "";
   $("#capi-form").elements.metaCapiToken.value = settings.metaCapiToken || "";
@@ -435,6 +436,7 @@ $("#brand-form").addEventListener("submit", async (event) => {
   try {
     const saved = await request("/api/settings", { method: "PATCH", body: JSON.stringify(payload) });
     pendingBrandLogoUrl = null;
+    state.settings = { ...state.settings, ...saved };
     applyBranding(saved);
     status.style.color = "var(--green)";
     status.textContent = "Salvo ✓";
@@ -568,6 +570,11 @@ function openRuleDialog(media = null, rule = null) {
   if (!rule) {
     form.elements.deliveryStyle.value = "button";
     form.elements.buttonTitle.value = "ACESSAR MATERIAL";
+    const handle = state.settings.brandHandle;
+    if (handle) {
+      form.elements.profileUrl.value = `https://www.instagram.com/${handle}/`;
+      form.elements.followPrompt.value = `Ainda falta um passo: siga @${handle} e depois toque em JÁ SEGUI ✨`;
+    }
   }
   const hasDelivery = form.elements.followUpEnabled.checked;
   const requiresFollow = form.elements.requireFollow.checked;
