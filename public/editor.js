@@ -9,26 +9,60 @@ function isSafeHref(value) {
   }
 }
 
-function cleanNode(node) {
-  for (const child of [...node.childNodes]) {
-    if (child.nodeType === Node.COMMENT_NODE) { child.remove(); continue; }
-    if (child.nodeType === Node.TEXT_NODE) continue;
-    if (child.nodeType !== Node.ELEMENT_NODE || !ALLOWED_TAGS.has(child.tagName)) {
-      child.replaceWith(...child.childNodes);
-      continue;
+// Tags fora da allowlist que carregam estrutura de bloco — em vez de só desembrulhar (e grudar
+// tudo num parágrafo só), viram o equivalente permitido mais próximo.
+const RENAME_TAGS = { H1: "H2", H4: "H3", H5: "H3", H6: "H3", PRE: "P", SECTION: "DIV", ARTICLE: "DIV", HEADER: "DIV",
+  FOOTER: "DIV", MAIN: "DIV", ASIDE: "DIV", FIGURE: "DIV", TABLE: "DIV", TBODY: "DIV", THEAD: "DIV", TR: "P", DT: "P", DD: "P" };
+const BLOCK_TAG = /<(p|br|h2|h3|ul|ol|li|blockquote|div|hr)\b/i;
+const SEMANTIC_TAG = /<(h[1-6]|ul|ol|strong|b|em|i|blockquote)\b/i;
+const MARKDOWN_HINT = /^\s*(#{1,6}\s|[-*•+]\s|\d+[.)]\s|>\s?|```|(-{3,}|\*{3,}|_{3,})\s*$)|\*\*[^*]+\*\*/m;
+
+function renameElement(element, tagName) {
+  if (element.tagName === "PRE") {
+    // quebras de linha de <pre> só existem por causa do white-space — fora dele somem, então viram <br>
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const texts = [];
+    while (walker.nextNode()) texts.push(walker.currentNode);
+    for (const text of texts) {
+      const parts = text.textContent.split("\n");
+      if (parts.length < 2) continue;
+      text.replaceWith(...parts.flatMap((part, index) => index ? [document.createElement("br"), part] : [part]));
     }
-    for (const attr of [...child.attributes]) {
-      if (child.tagName === "A" && attr.name === "href") { if (!isSafeHref(attr.value)) child.removeAttribute("href"); continue; }
-      child.removeAttribute(attr.name);
-    }
-    cleanNode(child);
   }
+  const replacement = document.createElement(tagName);
+  replacement.append(...element.childNodes);
+  element.replaceWith(replacement);
+  return replacement;
+}
+
+function cleanChild(child) {
+  if (child.nodeType === Node.TEXT_NODE) return;
+  if (child.nodeType !== Node.ELEMENT_NODE) { child.remove(); return; }
+  if (RENAME_TAGS[child.tagName]) child = renameElement(child, RENAME_TAGS[child.tagName]);
+  if (child.tagName === "TD" || child.tagName === "TH") child.append(" ");
+  // Google Docs embrulha o documento inteiro num <b style="font-weight:normal"> — manter viraria tudo negrito
+  const fakeBold = child.tagName === "B" && /font-weight\s*:\s*(normal|[1-5]00)/i.test(child.getAttribute("style") || "");
+  if (fakeBold || !ALLOWED_TAGS.has(child.tagName)) {
+    const children = [...child.childNodes];
+    child.replaceWith(...children);
+    children.forEach(cleanChild);
+    return;
+  }
+  for (const attr of [...child.attributes]) {
+    if (child.tagName === "A" && attr.name === "href") { if (!isSafeHref(attr.value)) child.removeAttribute("href"); continue; }
+    if (child.tagName === "A" && attr.name === "target" && attr.value === "_blank") continue;
+    if (child.tagName === "OL" && attr.name === "start" && /^\d{1,4}$/.test(attr.value)) continue;
+    child.removeAttribute(attr.name);
+  }
+  // target=_blank sem rel deixa a página aberta alcançar esta via window.opener
+  if (child.tagName === "A" && child.getAttribute("target") === "_blank") child.setAttribute("rel", "noopener noreferrer");
+  [...child.childNodes].forEach(cleanChild);
 }
 
 export function sanitizeFragment(html) {
   const wrapper = document.createElement("div");
   wrapper.innerHTML = html;
-  cleanNode(wrapper);
+  [...wrapper.childNodes].forEach(cleanChild);
   return wrapper.innerHTML;
 }
 
@@ -51,6 +85,110 @@ function linkifyText(text) {
   }
   out += escapeHtml(text.slice(lastIndex));
   return out;
+}
+
+// Negrito/itálico de markdown só fora dos links — senão um "_" ou "*" dentro de uma URL quebraria o <a>.
+function formatInline(text) {
+  return linkifyText(text).split(/(<a [^>]*>.*?<\/a>)/).map((part, index) => index % 2 ? part : part
+    .replace(/\*\*(?=\S)(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(?=\S)(.+?)__/g, "<strong>$1</strong>")
+    .replace(/(^|[\s(])\*(?=[^\s*])([^*]+?)\*(?=[\s).,!?:;]|$)/g, "$1<em>$2</em>")
+    .replace(/`([^`]+)`/g, "$1")).join("");
+}
+
+// Texto puro colado (markdown, bloco de notas, terminal, chat de IA) vira blocos de verdade, igual o Notion faz:
+// linha em branco separa parágrafo, quebra simples vira <br>, e #, -, 1., >, --- viram título/lista/citação/divisor.
+export function plainTextToHtml(text) {
+  const lines = String(text ?? "").replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  let paragraph = [];
+  let quote = [];
+  let list = null;
+  let fence = false;
+  const flushParagraph = () => { if (paragraph.length) out.push(`<p>${paragraph.join("<br>")}</p>`); paragraph = []; };
+  const flushQuote = () => { if (quote.length) out.push(`<blockquote>${quote.join("<br>")}</blockquote>`); quote = []; };
+  const flushList = () => { if (list) out.push(`<${list.type}${list.start > 1 ? ` start="${list.start}"` : ""}>${list.items.map((item) => `<li>${item}</li>`).join("")}</${list.type}>`); list = null; };
+  const flushAll = () => { flushParagraph(); flushQuote(); flushList(); };
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (/^\s*```/.test(line)) { flushAll(); fence = !fence; continue; }
+    if (fence) { paragraph.push(escapeHtml(line) || "&nbsp;"); continue; }
+    if (!line.trim()) {
+      flushParagraph(); flushQuote();
+      // lista separada por linha em branco ("1. a\n\n2. b") continua sendo uma lista só
+      const next = lines.slice(index + 1).find((candidate) => candidate.trim());
+      const nextType = next && (/^\s*\d+[.)]\s/.test(next) ? "ol" : /^\s*[-*•+]\s/.test(next) ? "ul" : null);
+      if (list && nextType !== list.type) flushList();
+      continue;
+    }
+    let match;
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flushAll(); out.push("<hr>"); continue; }
+    if ((match = line.match(/^\s*(#{1,6})\s+(.*)$/))) { flushAll(); const tag = match[1].length <= 2 ? "h2" : "h3"; out.push(`<${tag}>${formatInline(match[2])}</${tag}>`); continue; }
+    if ((match = line.match(/^\s*>\s?(.*)$/))) { flushParagraph(); flushList(); quote.push(formatInline(match[1])); continue; }
+    const listMatch = line.match(/^\s*(?:(\d+)[.)]|[-*•+])\s+(?:\[([ xX])\]\s+)?(.*)$/);
+    if (listMatch) {
+      flushParagraph(); flushQuote();
+      const type = listMatch[1] ? "ol" : "ul";
+      if (list?.type !== type) { flushList(); list = { type, items: [], start: Number(listMatch[1]) || 1 }; }
+      const checkbox = listMatch[2] === undefined ? "" : listMatch[2] === " " ? "☐ " : "☑ ";
+      list.items.push(checkbox + formatInline(listMatch[3]));
+      continue;
+    }
+    flushQuote();
+    if (list) flushList();
+    paragraph.push(formatInline(line.trim()));
+  }
+  flushAll();
+  return out.join("") || "<p></p>";
+}
+
+// O HTML da área de transferência nem sempre ajuda: editor de código/terminal manda o markdown cru
+// dentro de <div>/<span>, e alguns apps mandam um HTML sem nenhum bloco (tudo numa linha só).
+// Nesses casos o texto puro, interpretado acima, fica bem mais fiel ao original.
+function preferPlainText(cleanHtml, plainText) {
+  if (!plainText.includes("\n")) return false;
+  if (!BLOCK_TAG.test(cleanHtml)) return true;
+  return MARKDOWN_HINT.test(plainText) && !SEMANTIC_TAG.test(cleanHtml);
+}
+
+// Atalhos de digitação do Notion: "# " título, "## " / "### " subtítulo, "- " lista, "1. " lista numerada, "> " citação.
+const TYPING_SHORTCUTS = [
+  [/^#{1,2}$/, "formatBlock", "h2"], [/^#{3,6}$/, "formatBlock", "h3"], [/^[-*•]$/, "insertUnorderedList"],
+  [/^1[.)]$/, "insertOrderedList"], [/^>$/, "formatBlock", "blockquote"],
+];
+
+function applyTypingShortcut(el) {
+  const selection = window.getSelection();
+  if (!selection || !selection.isCollapsed || selection.rangeCount === 0 || !el.contains(selection.anchorNode)) return;
+  let block = selection.anchorNode;
+  while (block.parentNode && block.parentNode !== el) block = block.parentNode;
+  if (block.nodeType === Node.ELEMENT_NODE && /^(LI|UL|OL|H2|H3|BLOCKQUOTE)$/.test(block.tagName)) return;
+  const prefix = document.createRange();
+  prefix.setStart(block, 0);
+  prefix.setEnd(selection.anchorNode, selection.anchorOffset);
+  const typed = prefix.toString().replace(/ /g, " ");
+  if (!typed.endsWith(" ")) return;
+  const shortcut = TYPING_SHORTCUTS.find(([pattern]) => pattern.test(typed.slice(0, -1)));
+  if (!shortcut) return;
+  prefix.deleteContents();
+  if (shortcut[1] === "formatBlock") {
+    if (!block.textContent && block.nodeType === Node.ELEMENT_NODE) block.append(document.createElement("br"));
+    document.execCommand(shortcut[1], false, shortcut[2]);
+    return;
+  }
+  // insertUnorderedList dentro de um <p> gera <p><ul> no Chrome — troca o bloco pela lista na mão
+  const list = document.createElement(shortcut[1] === "insertOrderedList" ? "ol" : "ul");
+  const item = document.createElement("li");
+  if (block.nodeType === Node.ELEMENT_NODE) item.append(...block.childNodes); else item.append(block.cloneNode());
+  if (!item.textContent) item.replaceChildren(document.createElement("br"));
+  list.append(item);
+  block.replaceWith(list);
+  const caret = document.createRange();
+  caret.setStart(item, 0);
+  caret.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(caret);
 }
 
 // Depois de digitar espaço/Enter, olha a "palavra" que acabou de ser fechada e, se for uma URL,
@@ -85,13 +223,11 @@ function linkifyWordBeforeCaret(el) {
 
 export function createEditor(el) {
   el.contentEditable = "true";
+  // Enter cria <p> (igual Notion) em vez do <div> padrão do contentEditable
+  try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch { /* navegador sem suporte */ }
   el.addEventListener("paste", (event) => {
     event.preventDefault();
     const clipboardHtml = event.clipboardData.getData("text/html");
-    if (clipboardHtml) {
-      document.execCommand("insertHTML", false, sanitizeFragment(clipboardHtml));
-      return;
-    }
     const plainText = event.clipboardData.getData("text/plain");
     const trimmed = plainText.trim();
     const selection = window.getSelection();
@@ -100,18 +236,25 @@ export function createEditor(el) {
       document.execCommand("createLink", false, trimmed);
       return;
     }
-    document.execCommand("insertHTML", false, linkifyText(plainText));
+    const cleanHtml = clipboardHtml ? sanitizeFragment(clipboardHtml) : "";
+    if (cleanHtml && !preferPlainText(cleanHtml, plainText)) {
+      document.execCommand("insertHTML", false, cleanHtml);
+      return;
+    }
+    // texto de uma linha só entra inline, no meio do parágrafo atual; várias linhas viram blocos
+    document.execCommand("insertHTML", false, plainText.includes("\n") ? plainTextToHtml(plainText) : formatInline(plainText));
   });
   el.addEventListener("input", (event) => {
     const isSpace = event.inputType === "insertText" && event.data === " ";
     const isNewline = event.inputType === "insertParagraph" || event.inputType === "insertLineBreak";
     if (!isSpace && !isNewline) return;
     try { linkifyWordBeforeCaret(el); } catch { /* best-effort, nunca quebra a digitação */ }
+    if (isSpace) try { applyTypingShortcut(el); } catch { /* idem */ }
   });
   return {
     el,
     getHtml: () => sanitizeFragment(el.innerHTML),
-    setHtml: (value) => { el.innerHTML = sanitizeFragment(value || "<p></p>"); },
+    setHtml: (value) => { el.innerHTML = sanitizeFragment(value || "<p><br></p>"); },
     focus: () => el.focus(),
   };
 }

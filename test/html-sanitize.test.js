@@ -31,3 +31,8 @@ test("strips a data: URI href", () => {
 test("removes script tags entirely", () => {
   assert.equal(sanitizeHtml('<p>oi</p><script>alert(1)</script>'), "<p>oi</p>");
 });
+
+test("keeps a numeric start on ordered lists and drops anything else", () => {
+  assert.equal(sanitizeHtml('<ol start="3"><li>a</li></ol>'), '<ol start="3"><li>a</li></ol>');
+  assert.equal(sanitizeHtml('<ol start="3 onclick=x" type="a"><li>a</li></ol>'), "<ol><li>a</li></ol>");
+});

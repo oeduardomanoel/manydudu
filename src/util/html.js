@@ -3,7 +3,7 @@ export function escapeHtml(value = "") {
 }
 
 const ALLOWED_TAGS = new Set(["p", "br", "strong", "b", "em", "i", "u", "a", "h1", "h2", "h3", "ul", "ol", "li", "blockquote", "hr", "span", "div"]);
-const ALLOWED_ATTRS = { a: new Set(["href", "target", "rel"]) };
+const ALLOWED_ATTRS = { a: new Set(["href", "target", "rel"]), ol: new Set(["start"]) };
 const ALLOWED_HREF_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
 function isSafeHref(value) {
@@ -33,6 +33,7 @@ export function sanitizeHtml(html = "") {
         const key = attrName.toLowerCase();
         if (!allowed.has(key)) continue;
         if (key === "href" && !isSafeHref(attrValue)) continue;
+        if (key === "start" && !/^\d{1,4}$/.test(attrValue)) continue;
         kept.push(`${key}="${escapeHtml(attrValue)}"`);
       }
       return kept.length ? `<${name} ${kept.join(" ")}>` : `<${name}>`;
