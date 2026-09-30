@@ -40,3 +40,18 @@ test("overall is the worst of the four signals", () => {
   const report = buildHealthReport({ metaToken: { accessToken: "x", expiresAt: Date.now() + 40 * 86400000 }, webhookConfigured: true, usage: { usage: 85 }, storeStatus: { ok: true, backend: "local-json" } });
   assert.equal(report.overall, "warn");
 });
+
+test("a token only in .env (never refreshed yet) counts as configured, and a live check marks it ok", () => {
+  const report = buildHealthReport({ tokenConfigured: true, tokenCheck: { valid: true, username: "perfil" }, webhookConfigured: true });
+  assert.equal(report.token.configured, true);
+  assert.equal(report.token.status, "ok");
+  assert.equal(report.token.username, "perfil");
+});
+
+test("an expired token is critical even with a stored expiry that looks far away", () => {
+  const report = buildHealthReport({ metaToken: { accessToken: "x", expiresAt: Date.now() + 40 * 86400000 },
+    tokenCheck: { valid: false, expired: true, error: "Session has expired" }, webhookConfigured: true });
+  assert.equal(report.token.status, "critical");
+  assert.equal(report.token.expired, true);
+  assert.equal(report.token.daysLeft, null);
+});

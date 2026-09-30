@@ -341,7 +341,14 @@ function setHealthField(prefix, label, statusKey) {
 async function loadHealth() {
   try {
     const report = await request("/api/health");
-    setHealthField("token", report.token.daysLeft != null ? `${report.token.daysLeft} dias restantes` : report.token.configured ? "Validade desconhecida" : "Não configurado", report.token.status);
+    const { token } = report;
+    const tokenLabel = !token.configured ? "Não configurado"
+      : token.expired ? "Expirado — gere um novo"
+      : token.valid === false ? "Inválido"
+      : token.daysLeft != null ? `${token.daysLeft} dias restantes`
+      : token.valid ? `Válido${token.username ? ` · @${token.username}` : ""}` : "Validade desconhecida";
+    setHealthField("token", tokenLabel, token.status);
+    $("#health-token").title = token.error || "";
     setHealthField("webhook", report.webhook.configured ? "Configurado" : "Faltando credenciais", report.webhook.status);
     setHealthField("usage", report.apiUsage.percent != null ? `${report.apiUsage.percent}% de uso` : "Sem dados ainda", report.apiUsage.status);
     setHealthField("store", report.store.ok ? `${report.store.backend === "supabase" ? "Supabase" : "Arquivo local"} · ${report.store.latencyMs}ms` : `Erro: ${report.store.error}`, report.store.status);

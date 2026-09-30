@@ -1,4 +1,12 @@
+import { createHash } from "node:crypto";
+
 export const REFRESH_THRESHOLD_DAYS = 10;
+
+// Identifica de qual token do .env veio o token renovado guardado no banco — se o admin colar um
+// token novo no .env, a impressão digital muda e o servidor passa a usar o novo em vez do antigo salvo.
+export function tokenFingerprint(token) {
+  return createHash("sha256").update(String(token ?? "")).digest("hex").slice(0, 16);
+}
 
 export function isInstagramLoginToken(token) {
   return Boolean(token) && token.startsWith("IG");
@@ -40,28 +48,31 @@ export function needsRefresh(expiresAt) {
   return expiresAt - Date.now() < REFRESH_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
 }
 
-export async function maybeRefreshToken({ meta, store, appId, appSecret, fetcher = fetch, log = console.log, logError = console.error }) {
+// Sem validade conhecida, renova direto: refresh_access_token devolve expires_in, então a partir da
+// primeira renovação a validade fica salva. Antes isso dependia do debug_token, que falha com token
+// IGAA (e sem META_APP_ID) — o erro caía no catch e o token nunca era renovado até expirar no dia 60.
+export async function maybeRefreshToken({ meta, store, fetcher = fetch, log = console.log, logError = console.error }) {
   const currentToken = meta.accessToken;
   if (!isInstagramLoginToken(currentToken)) return;
   try {
     const stored = await store.getMetaToken();
-    let expiresAt = stored?.accessToken === currentToken ? stored.expiresAt : null;
-    if (!expiresAt) {
-      const info = await debugToken(currentToken, appId, appSecret, fetcher);
-      expiresAt = info.expires_at ? info.expires_at * 1000 : null;
-    }
+    const isStoredToken = stored?.accessToken === currentToken;
+    const expiresAt = isStoredToken ? stored.expiresAt : null;
     if (!needsRefresh(expiresAt)) return;
     const refreshed = await refreshLongLivedToken(currentToken, fetcher);
     meta.setAccessToken(refreshed.accessToken);
-    await store.setMetaToken(refreshed);
+    await store.setMetaToken({ ...refreshed, origin: isStoredToken && stored.origin ? stored.origin : tokenFingerprint(currentToken) });
     log(`Token do Instagram renovado automaticamente. Válido até ${new Date(refreshed.expiresAt).toISOString()}.`);
   } catch (error) {
-    logError(`Falha ao renovar o token do Instagram automaticamente: ${error.message}. Continuando com o token atual até a próxima tentativa.`);
+    const expired = /session has expired|error validating access token/i.test(error.message);
+    logError(expired
+      ? `Token do Instagram EXPIRADO: ${error.message}. Gere um token novo no painel da Meta, atualize META_ACCESS_TOKEN no .env e reinicie.`
+      : `Falha ao renovar o token do Instagram automaticamente: ${error.message}. Continuando com o token atual até a próxima tentativa.`);
   }
 }
 
-export function scheduleTokenRefresh({ meta, store, appId, appSecret, fetcher = fetch, intervalMs = 24 * 60 * 60 * 1000 }) {
-  const run = () => maybeRefreshToken({ meta, store, appId, appSecret, fetcher });
+export function scheduleTokenRefresh({ meta, store, fetcher = fetch, intervalMs = 24 * 60 * 60 * 1000 }) {
+  const run = () => maybeRefreshToken({ meta, store, fetcher });
   void run();
   const timer = setInterval(run, intervalMs);
   timer.unref?.();

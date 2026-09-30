@@ -67,6 +67,16 @@ export class MetaClient {
     return this.#post(this.messagesPath, { recipient: { id: recipientId }, message });
   }
 
+  // Chamada barata pra saber se o token ainda vale — usada pela tela de Saúde.
+  async checkToken() {
+    try {
+      const me = await this.#get("/me?fields=id,username");
+      return { valid: true, username: me.username ?? null };
+    } catch (error) {
+      return { valid: false, expired: error.code === 190, error: error.message };
+    }
+  }
+
   async getUserProfile(instagramScopedId) {
     const id = encodeURIComponent(instagramScopedId);
     const fields = "id,name,username,profile_pic,is_user_follow_business,is_business_follow_user";
@@ -79,7 +89,7 @@ export class MetaClient {
       headers: { Authorization: `Bearer ${this.accessToken}` }, signal: AbortSignal.timeout(12_000)
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error?.message || `Meta respondeu ${response.status}.`);
+    if (!response.ok) throw Object.assign(new Error(result.error?.message || `Meta respondeu ${response.status}.`), { code: result.error?.code });
     return result;
   }
 

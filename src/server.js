@@ -5,7 +5,7 @@ import { extname, join, normalize, sep } from "node:path";
 import { createApp } from "./app.js";
 import { MetaClient } from "./meta/client.js";
 import { createStore } from "./storage/create-store.js";
-import { scheduleTokenRefresh } from "./meta/token-refresh.js";
+import { scheduleTokenRefresh, tokenFingerprint } from "./meta/token-refresh.js";
 
 const env = process.env;
 const port = Number(env.PORT || 3000);
@@ -14,9 +14,13 @@ await store.initialize();
 const meta = new MetaClient({ accessToken: env.META_ACCESS_TOKEN, instagramAccountId: env.INSTAGRAM_ACCOUNT_ID,
   graphVersion: env.META_GRAPH_VERSION || "v23.0", minWriteIntervalMs: Number(env.META_MIN_WRITE_INTERVAL_MS || 1500) });
 
+// O token renovado salvo no banco só vale enquanto derivar do META_ACCESS_TOKEN atual — se o admin
+// colou um token novo no .env (ex.: o anterior expirou), o novo tem prioridade sobre o salvo.
 const storedToken = await store.getMetaToken();
-if (storedToken?.accessToken) meta.setAccessToken(storedToken.accessToken);
-if (env.META_ACCESS_TOKEN) scheduleTokenRefresh({ meta, store, appId: env.META_APP_ID, appSecret: env.META_APP_SECRET });
+const storedUsable = Boolean(storedToken?.accessToken) && !(storedToken.expiresAt <= Date.now())
+  && (!env.META_ACCESS_TOKEN || !storedToken.origin || storedToken.origin === tokenFingerprint(env.META_ACCESS_TOKEN));
+if (storedUsable) meta.setAccessToken(storedToken.accessToken);
+if (env.META_ACCESS_TOKEN) scheduleTokenRefresh({ meta, store });
 
 const MIN_SECRET_LENGTH = 32;
 let sessionSecret = env.SESSION_SECRET || "";

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { debugToken, isInstagramLoginToken, needsRefresh, maybeRefreshToken } from "../src/meta/token-refresh.js";
+import { debugToken, isInstagramLoginToken, needsRefresh, maybeRefreshToken, tokenFingerprint } from "../src/meta/token-refresh.js";
 
 const jsonResponse = (body, ok = true, status = 200) => ({ ok, status, json: async () => body });
 
@@ -46,17 +46,36 @@ test("debugToken uses an app token (appId|appSecret) as access_token, never the 
   assert.equal(params.get("access_token"), "123456|shh-secret");
 });
 
-test("maybeRefreshToken calls debugToken with appId/appSecret when there's no cached expiry yet", async () => {
-  const meta = fakeMeta("IGAALcurrent");
+test("maybeRefreshToken refreshes directly when there's no cached expiry, without depending on debug_token", async () => {
+  const meta = fakeMeta("IGAALfromEnv");
   const store = fakeStore(null);
-  let capturedUrl;
-  const fetcher = async (url) => {
-    capturedUrl = url;
-    return jsonResponse({ expires_at: Math.floor((Date.now() + 40 * 24 * 60 * 60 * 1000) / 1000) });
-  };
-  await maybeRefreshToken({ meta, store, appId: "123456", appSecret: "shh-secret", fetcher });
-  assert.match(capturedUrl, /debug_token/);
-  assert.ok(new URL(capturedUrl).searchParams.get("access_token") === "123456|shh-secret");
+  const calls = [];
+  const fetcher = async (url) => { calls.push(url); return jsonResponse({ access_token: "IGAALrefreshed", expires_in: 5184000 }); };
+  await maybeRefreshToken({ meta, store, fetcher });
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /refresh_access_token/);
+  assert.doesNotMatch(calls[0], /debug_token/);
+  assert.equal(meta.accessToken, "IGAALrefreshed");
+  assert.equal(store.state.token.origin, tokenFingerprint("IGAALfromEnv"));
+  assert.ok(store.state.token.expiresAt > Date.now() + 59 * 86400000);
+});
+
+test("a chained refresh keeps the origin of the original .env token", async () => {
+  const origin = tokenFingerprint("IGAALfromEnv");
+  const meta = fakeMeta("IGAALstored");
+  const store = fakeStore({ accessToken: "IGAALstored", expiresAt: Date.now() + 1000, origin });
+  await maybeRefreshToken({ meta, store, fetcher: async () => jsonResponse({ access_token: "IGAALnext", expires_in: 5184000 }) });
+  assert.equal(store.state.token.origin, origin);
+});
+
+test("maybeRefreshToken logs a clear message when the token already expired", async () => {
+  const meta = fakeMeta("IGAALdead");
+  const store = fakeStore(null);
+  const errors = [];
+  const fetcher = async () => jsonResponse({ error: { message: "Error validating access token: Session has expired on Wednesday", code: 190 } }, false, 400);
+  await maybeRefreshToken({ meta, store, fetcher, logError: (message) => errors.push(message) });
+  assert.match(errors[0], /EXPIRADO/);
+  assert.equal(store.state.setCalls, 0);
 });
 
 test("maybeRefreshToken skips non-Instagram-login tokens entirely", async () => {

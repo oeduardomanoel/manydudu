@@ -412,7 +412,9 @@ export function createApp({ store, meta, config, serveStatic }) {
         } catch (error) {
           storeStatus = { ok: false, backend: store.backend, error: error.message };
         }
-        const report = buildHealthReport({ metaToken, usage: meta.getUsageSnapshot(), webhookConfigured: config.configured, lastEventAt, storeStatus });
+        const tokenCheck = meta.accessToken ? await meta.checkToken() : null;
+        const report = buildHealthReport({ metaToken: metaToken?.accessToken === meta.accessToken ? metaToken : null, tokenConfigured: Boolean(meta.accessToken),
+          tokenCheck, usage: meta.getUsageSnapshot(), webhookConfigured: config.configured, lastEventAt, storeStatus });
         return json(response, 200, report);
       }
       if (request.method === "GET" && url.pathname === "/api/backup") {

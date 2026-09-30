@@ -2,15 +2,24 @@ import { REFRESH_THRESHOLD_DAYS } from "../meta/token-refresh.js";
 
 const WARN_MULTIPLIER = 2;
 
-export function buildHealthReport({ metaToken, usage, webhookConfigured, lastEventAt, storeStatus } = {}) {
+// tokenCheck vem de uma chamada ao vivo na Meta (MetaClient#checkToken): sem ela, o painel só sabia
+// a validade de tokens já renovados pelo servidor e mostrava "Não configurado" pra um token do .env
+// que funcionava — e não distinguia isso de um token expirado.
+export function buildHealthReport({ metaToken, tokenConfigured, tokenCheck, usage, webhookConfigured, lastEventAt, storeStatus } = {}) {
   const now = Date.now();
 
+  const configured = Boolean(metaToken?.accessToken || tokenConfigured);
   const daysLeft = metaToken?.expiresAt ? (metaToken.expiresAt - now) / 86400000 : null;
+  const invalid = tokenCheck?.valid === false;
   const token = {
-    configured: Boolean(metaToken?.accessToken),
-    daysLeft: daysLeft != null ? Math.round(daysLeft) : null,
-    status: !metaToken?.accessToken ? "critical"
-      : daysLeft == null ? "warn"
+    configured,
+    valid: tokenCheck?.valid ?? null,
+    expired: Boolean(tokenCheck?.expired),
+    error: invalid ? tokenCheck.error ?? null : null,
+    username: tokenCheck?.username ?? null,
+    daysLeft: daysLeft != null && !invalid ? Math.round(daysLeft) : null,
+    status: !configured || invalid ? "critical"
+      : daysLeft == null ? (tokenCheck?.valid ? "ok" : "warn")
       : daysLeft < REFRESH_THRESHOLD_DAYS ? "critical"
       : daysLeft < REFRESH_THRESHOLD_DAYS * WARN_MULTIPLIER ? "warn"
       : "ok",
