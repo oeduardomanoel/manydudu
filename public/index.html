@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title id="page-title">ManyDudu · Automação que conversa</title><link rel="stylesheet" href="/styles.css?v=4c370c8"><link rel="stylesheet" id="theme-link" href="/theme.css?v=4c370c8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;0,800;0,900;1,800&family=Work+Sans:wght@400;500;600;700;800&display=swap">
 </head>
 <body>
   <div class="grain"></div>
   <aside>
     <a class="brand" href="/" id="brand-link"><span id="brand-mark" class="brand-mark">MD</span> <span id="brand-name">manydudu</span></a>
-    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="inbox" data-scroll="top">✉ <span>DM</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button><button data-view="health" data-scroll="health">♡ <span>Saúde</span></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button></nav>
+    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="inbox" data-scroll="top">✉ <span>DM</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button><button data-view="health" data-scroll="health">♡ <span>Saúde</span></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button><button data-view="carousel" data-scroll="carousel-section">▤ <span>Carrossel</span></button></nav>
     <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
   </aside>
   <main id="top">
@@ -51,7 +52,8 @@
       <div id="campaigns-list" class="rule-list"></div>
     </section>
     <section class="contacts-section" id="leads">
-      <div class="section-head"><div><p class="eyebrow">CAPTURADOS PELAS CAMPANHAS</p><h2>Leads</h2></div><span id="leads-total">0 leads</span></div>
+      <div class="section-head"><div><p class="eyebrow">CAPTURADOS PELAS CAMPANHAS</p><h2>Leads</h2></div>
+        <div class="leads-tools"><span id="leads-total">0 leads</span><select id="leads-filter" aria-label="Filtrar por campanha"><option value="">Todas as campanhas</option></select><button type="button" class="edit-rule" id="export-leads">Exportar CSV</button></div></div>
       <div id="leads-list" class="rule-list"></div>
     </section>
     </div>
@@ -82,7 +84,7 @@
     </section>
     <section class="media-section" id="backup-section">
       <div class="section-head"><div><p class="eyebrow">SEM DEPENDER DE NINGUÉM</p><h2>Backup e restauração</h2></div></div>
-      <p class="hint">Baixe tudo (automações, contatos, campanhas, leads) num arquivo. Guarde num lugar seguro — é sua garantia se precisar reinstalar do zero ou trocar de servidor.</p>
+      <p class="hint">Baixe tudo (automações, contatos, campanhas, leads) num arquivo. Guarde num lugar seguro — é sua garantia se precisar reinstalar do zero ou trocar de servidor. <strong>Esse arquivo contém dados pessoais de contatos e leads — trate com o mesmo cuidado que uma planilha de clientes.</strong></p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <a class="primary compact" id="backup-download" href="/api/backup">⇩ Baixar backup</a>
         <button type="button" class="icon-btn" id="backup-restore-btn">⇧ Restaurar de um arquivo</button>
@@ -152,6 +154,42 @@
       </div>
     </section>
     </div>
+    <div id="view-carousel" class="view" hidden>
+    <header><div><p class="eyebrow">CONTEÚDO PRA POSTAR</p><h1>Carrossel<br><em>na sua identidade.</em></h1></div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="icon-btn" id="carousel-new">＋ Novo carrossel</button>
+        <button type="button" class="primary compact" id="carousel-download-all">⇩ Baixar todos</button>
+      </div>
+    </header>
+    <section class="media-section carousel-editor" id="carousel-section">
+      <p class="hint">Gerado no seu navegador, na hora — nada sobe pro servidor. Formato 1080×1350 (o retrato mais alto que o Instagram aceita). Fica salvo neste navegador até você criar outro.</p>
+      <div class="carousel-layout">
+        <div class="carousel-sidebar">
+          <label>Nome do carrossel (só pra você)<input id="carousel-title" placeholder="Guia de automação"></label>
+          <label>Cor de destaque<div class="carousel-accent-picker" id="carousel-accent-picker"></div></label>
+          <label>Fundo<div class="carousel-chip-row" id="carousel-background-picker"></div></label>
+          <label>Fonte<div class="carousel-chip-row" id="carousel-font-picker"></div></label>
+          <label>@ que aparece nos slides<input id="carousel-handle" placeholder="seuusuario"></label>
+          <div class="carousel-slide-list" id="carousel-slide-list"></div>
+          <div class="carousel-add-row">
+            <select id="carousel-add-type">
+              <option value="cover">Capa</option>
+              <option value="content">Conteúdo</option>
+              <option value="comparison">Comparação</option>
+              <option value="mockup">Mockup</option>
+              <option value="cta">Chamada final</option>
+            </select>
+            <button type="button" class="icon-btn" id="carousel-add-slide">＋ Adicionar slide</button>
+          </div>
+        </div>
+        <div class="carousel-stage">
+          <canvas id="carousel-canvas" width="1080" height="1350"></canvas>
+          <button type="button" class="icon-btn" id="carousel-download-one" style="margin-top:12px;width:100%">⇩ Baixar este slide</button>
+        </div>
+        <div class="carousel-fields" id="carousel-fields"></div>
+      </div>
+    </section>
+    </div>
   </main>
   <dialog id="rule-dialog"><form id="rule-form"><div class="dialog-head"><div><p class="eyebrow" id="rule-dialog-mode">NOVA AUTOMAÇÃO</p><h2 id="rule-dialog-title">Quando alguém comentar...</h2></div><button type="button" class="close" data-close="rule-dialog">×</button></div>
     <div class="scope-card" id="rule-scope"><span class="scope-icon">◎</span><div><small>APLICAR EM</small><strong>Todos os conteúdos</strong></div><button type="button" id="clear-scope">Usar global</button></div>
@@ -179,31 +217,69 @@
     </div>
     <button class="primary wide" id="save-rule" type="submit">Criar automação →</button><p class="form-error" id="form-error" role="alert"></p>
   </form></dialog>
-  <dialog id="campaign-dialog"><form id="campaign-form"><div class="dialog-head"><div><p class="eyebrow" id="campaign-dialog-mode">NOVA CAMPANHA</p><h2>Conteúdo entregue após o formulário</h2></div><button type="button" class="close" data-close="campaign-dialog">×</button></div>
-    <label>Título<input name="title" placeholder="Guia de automação para Reels" required maxlength="140"></label>
-    <label>Link da campanha<input name="slug" id="campaign-slug" placeholder="gerado a partir do título" maxlength="60"></label>
-    <label>Conteúdo da entrega
-      <div class="editor-toolbar" id="editor-toolbar">
-        <button type="button" data-command="bold" title="Negrito"><b>B</b></button>
-        <button type="button" data-command="italic" title="Itálico"><i>I</i></button>
-        <button type="button" data-command="formatBlock" data-value="p" title="Texto normal">T</button>
-        <button type="button" data-command="formatBlock" data-value="h2" title="Título">H2</button>
-        <button type="button" data-command="formatBlock" data-value="h3" title="Subtítulo">H3</button>
-        <button type="button" data-command="insertUnorderedList" title="Lista">≡</button>
-        <button type="button" data-command="insertOrderedList" title="Lista numerada">1.</button>
-        <button type="button" data-command="formatBlock" data-value="blockquote" title="Citação">”</button>
-        <button type="button" data-command="insertHorizontalRule" title="Divisor">—</button>
-        <button type="button" data-command="createLink" data-value="" id="editor-link" title="Link">🔗</button>
+  <dialog id="campaign-dialog"><form id="campaign-form"><div class="dialog-head"><div><p class="eyebrow" id="campaign-dialog-mode">NOVA CAMPANHA</p><h2>Formulário que libera um conteúdo</h2></div><button type="button" class="close" data-close="campaign-dialog">×</button></div>
+    <div class="campaign-tabs" role="tablist" aria-label="Partes da campanha">
+      <button type="button" role="tab" class="active" aria-selected="true" data-campaign-tab="basico"><b>1</b> Básico</button>
+      <button type="button" role="tab" aria-selected="false" data-campaign-tab="formulario"><b>2</b> Formulário</button>
+      <button type="button" role="tab" aria-selected="false" data-campaign-tab="entrega"><b>3</b> Página de entrega</button>
+    </div>
+    <div class="campaign-layout">
+      <div class="campaign-panels">
+        <section class="campaign-panel" data-campaign-panel="basico" role="tabpanel">
+          <label>Título<input name="title" placeholder="Guia de automação para Reels" required maxlength="140"></label>
+          <p class="hint">Aparece no topo do formulário e da página de entrega.</p>
+          <label>Link da campanha<span class="slug-field"><span id="campaign-slug-prefix">/c/</span><input name="slug" id="campaign-slug" placeholder="gerado a partir do título" maxlength="60"></span></label>
+          <p class="hint" id="campaign-slug-hint">Só letras, números e hífen. Depois de criado, o link não muda — assim nenhuma DM já enviada quebra.</p>
+          <label class="follow-check"><input type="checkbox" name="active" checked><span><strong>Campanha ativa</strong><small>Desative para tirar o link do ar sem apagar os dados.</small></span></label>
+        </section>
+        <section class="campaign-panel" data-campaign-panel="formulario" role="tabpanel" hidden>
+          <label>Subtítulo<input name="subtitle" placeholder="Responda algumas perguntas rápidas e o conteúdo é liberado na hora." maxlength="200"></label>
+          <p class="hint">Uma frase curta dizendo o que a pessoa ganha ao preencher. Em branco = frase padrão.</p>
+          <label>O que a pessoa vai receber <small class="label-note">um item por linha · até 5</small><textarea name="benefits" rows="4" placeholder="10 prompts prontos pra copiar&#10;Passo a passo pra instalar&#10;Exemplos reais de uso"></textarea></label>
+          <p class="hint">Aparece como lista com ✓ no topo do formulário. Em branco, a lista não aparece.</p>
+          <div class="field-block">
+            <span class="field-title">Opções de nicho</span>
+            <div class="chip-input" id="niche-chips"><span class="chips" id="niche-chip-list"></span><input id="niche-input" placeholder="Digite e aperte Enter" maxlength="40" aria-label="Adicionar nicho"></div>
+            <p class="hint">"Outro" sempre aparece no fim, com campo pra pessoa escrever. <button type="button" class="link-btn" id="niche-defaults">Voltar pra lista padrão</button></p>
+          </div>
+          <label>Última pergunta<input name="interestLabel" placeholder="Qual automação te interessa agora?" maxlength="200"></label>
+          <p class="hint">Troque pelo que faz sentido pro seu nicho (ex.: "O que você mais precisa resolver agora?").</p>
+        </section>
+        <section class="campaign-panel" data-campaign-panel="entrega" role="tabpanel" hidden>
+          <div class="field-block">
+            <span class="field-title">Conteúdo liberado depois do formulário</span>
+            <div class="editor-toolbar" id="editor-toolbar">
+              <button type="button" data-command="bold" title="Negrito"><b>B</b></button>
+              <button type="button" data-command="italic" title="Itálico"><i>I</i></button>
+              <button type="button" data-command="formatBlock" data-value="p" title="Texto normal">T</button>
+              <button type="button" data-command="formatBlock" data-value="h2" title="Título (vira item do índice)">H2</button>
+              <button type="button" data-command="formatBlock" data-value="h3" title="Subtítulo">H3</button>
+              <button type="button" data-command="insertUnorderedList" title="Lista">≡</button>
+              <button type="button" data-command="insertOrderedList" title="Lista numerada">1.</button>
+              <button type="button" data-command="formatBlock" data-value="blockquote" title="Citação">”</button>
+              <button type="button" data-command="formatBlock" data-value="pre" title="Bloco de prompt — ganha botão Copiar">{ } Prompt</button>
+              <button type="button" data-command="insertImage" title="Imagem (link https)">🖼 Imagem</button>
+              <button type="button" data-command="insertHorizontalRule" title="Divisor">—</button>
+              <button type="button" data-command="createLink" data-value="" id="editor-link" title="Link">🔗</button>
+            </div>
+            <p class="hint" style="margin:0 0 7px">Cole de qualquer lugar (Notion, Google Docs, ChatGPT, markdown) — a formatação é ajustada sozinha. Prompt entre <code>```</code> vira bloco com botão <strong>Copiar</strong>. Com 3 ou mais títulos H2, a página ganha um índice.</p>
+            <div class="editor-body" id="campaign-editor"></div>
+          </div>
+          <div class="field-pair">
+            <label>Botão final <small class="label-note">opcional</small><input name="ctaLabel" placeholder="Falar no WhatsApp" maxlength="60"></label>
+            <label>Link do botão<input name="ctaUrl" type="url" placeholder="https://wa.me/5511999999999" maxlength="500"></label>
+          </div>
+          <p class="hint">Aparece no fim da página de entrega, acima do "Seguir @". Deixe os dois em branco pra não mostrar.</p>
+        </section>
       </div>
-      <p class="hint" style="margin:0 0 7px">Cole de qualquer lugar (Notion, Google Docs, ChatGPT, markdown) — a formatação é ajustada sozinha. Atalhos: <code># </code> título, <code>- </code> lista, <code>1. </code> lista numerada, <code>&gt; </code> citação.</p>
-      <div class="editor-body" id="campaign-editor"></div>
-    </label>
-    <label>Pergunta final do formulário<input name="interestLabel" placeholder="Qual automação te interessa agora?" maxlength="200"></label>
-    <p class="hint" style="margin:-10px 0 14px">Nem toda campanha é sobre automação — troque essa pergunta pelo que faz sentido pro seu nicho (ex.: "O que você mais precisa resolver agora?").</p>
-    <label>Nichos do formulário (separados por vírgula)<input name="niches" placeholder="Estética, Saúde e bem-estar, Educação, Imobiliário, Coach / Mentoria, E-commerce, Serviços locais"></label>
-    <p class="hint" style="margin:-10px 0 14px">Deixe em branco pra usar a lista padrão. A opção "Outro" é adicionada automaticamente se você não incluir.</p>
-    <label class="follow-check"><input type="checkbox" name="active" checked><span><strong>Campanha ativa</strong><small>Desative para tirar o link do ar sem apagar os dados.</small></span></label>
-    <button class="primary wide" id="save-campaign" type="submit">Criar campanha →</button><p class="form-error" id="campaign-form-error" role="alert"></p>
+      <div class="campaign-preview" role="region" aria-label="Prévia">
+        <div class="campaign-preview-head"><span>Prévia <small id="campaign-preview-status"></small></span>
+          <div class="preview-toggle"><button type="button" class="active" data-preview-view="form">Formulário</button><button type="button" data-preview-view="content">Entrega</button></div>
+        </div>
+        <iframe id="campaign-preview-frame" title="Prévia da campanha" sandbox="allow-scripts"></iframe>
+      </div>
+    </div>
+    <div class="campaign-footer"><p class="form-error" id="campaign-form-error" role="alert"></p><button class="primary" id="save-campaign" type="submit">Criar campanha →</button></div>
   </form></dialog>
   <dialog id="pipeline-dialog"><button type="button" class="close floating" data-close="pipeline-dialog">×</button><div id="pipeline-detail"></div></dialog>
   <dialog id="mark-paid-dialog"><button type="button" class="close floating" data-close="mark-paid-dialog">×</button>

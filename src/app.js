@@ -1,7 +1,7 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createRule, findMatchingRule, selectPublicReply, suggestKeywords, updateRule } from "./domain/automation.js";
 import { buildAnalytics } from "./domain/analytics.js";
-import { extractComments, extractMessages, extractPostbacks, verifyMetaSignature } from "./meta/webhook.js";
+import { extractComments, extractMessages, extractPostbacks, parseSignedRequest, verifyMetaSignature } from "./meta/webhook.js";
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
 import { exportPackage, parsePackage } from "./domain/automation-package.js";
 import { applyBackup, exportState, validateBackup } from "./domain/backup.js";
@@ -9,6 +9,7 @@ import { buildHealthReport } from "./domain/health.js";
 import { paginateActivity } from "./domain/activity.js";
 import { isFatigued } from "./domain/fatigue.js";
 import { scoreContact, scoreLead } from "./domain/lead-score.js";
+import { isStale } from "./domain/retention.js";
 import { buildContentRoi } from "./domain/roi.js";
 import { validateSettings } from "./domain/settings.js";
 import { deliverStageChange, isBlockedTarget } from "./domain/outbound-webhook.js";
@@ -23,7 +24,7 @@ import { renderContentPage, renderGatePage, renderNotFound } from "./pages/gate.
 import { renderSetupPage } from "./pages/setup.js";
 import { upsertEnvFile } from "./util/env-file.js";
 import { debugToken } from "./meta/token-refresh.js";
-import { checkPassword, clearCsrfCookie, clearLoginAttempts, clearSessionCookie, createAccessCookie, createCsrfCookie, createSessionCookie, isLeadRateLimited, isLoginRateLimited, isSecureRequest, isSetupRateLimited, isSetupRequestAuthorized, readAccessSlugs, readSession, recordFailedLogin, recordLeadSubmission, recordSetupAttempt, verifyCsrf } from "./auth.js";
+import { checkPassword, clearCsrfCookie, clearLoginAttempts, clearSessionCookie, createAccessCookie, createCsrfCookie, createSessionCookie, getClientIp, hashPassword, isLeadRateLimited, isLoginRateLimited, isSecureRequest, isSetupRateLimited, isSetupRequestAuthorized, readAccessSlugs, readSession, recordFailedLogin, recordLeadSubmission, recordSetupAttempt, verifyCsrf, verifyPasswordHash } from "./auth.js";
 
 const json = (response, status, body) => { response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" }); response.end(JSON.stringify(body)); };
 const html = (response, status, body) => { response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" }); response.end(body); };
@@ -55,6 +56,7 @@ function requiresAuth(pathname, method) {
   if (pathname === "/api/login") return false;
   if (pathname === "/api/branding") return false;
   if (pathname === "/api/leads" && method === "POST") return false;
+  if (pathname === "/api/meta/data-deletion" && method === "POST") return false;
   return true;
 }
 
@@ -130,15 +132,16 @@ export function createApp({ store, meta, config, serveStatic }) {
           const supabaseSecretKey = String(input.supabaseSecretKey ?? "").trim();
           if (Boolean(supabaseUrl) !== Boolean(supabaseSecretKey)) throw new AppError("Informe URL e secret key do Supabase juntas, ou deixe os dois em branco.");
 
+          const adminPasswordHash = hashPassword(adminPassword);
           const updates = {
-            ADMIN_USER: adminUser, ADMIN_PASSWORD: adminPassword, SESSION_SECRET: randomBytes(32).toString("hex"),
+            ADMIN_USER: adminUser, ADMIN_PASSWORD: adminPasswordHash, SESSION_SECRET: randomBytes(32).toString("hex"),
             META_ACCESS_TOKEN: metaAccessToken, META_APP_ID: metaAppId, META_APP_SECRET: metaAppSecret, META_VERIFY_TOKEN: metaVerifyToken,
             INSTAGRAM_ACCOUNT_ID: instagramAccountId,
           };
           if (supabaseUrl) { updates.SUPABASE_URL = supabaseUrl; updates.SUPABASE_SECRET_KEY = supabaseSecretKey; }
           await upsertEnvFile(config.envPath, updates);
           config.adminUser = adminUser;
-          config.adminPassword = adminPassword;
+          config.adminPassword = adminPasswordHash;
           return json(response, 200, { ok: true, metaVerifyToken });
         }
         if (request.method === "POST" && url.pathname === "/api/setup/restart") {
@@ -164,10 +167,14 @@ export function createApp({ store, meta, config, serveStatic }) {
       if (request.method === "POST" && url.pathname === "/api/login") {
         if (isLoginRateLimited(request)) return json(response, 429, { error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." });
         const { user, password } = JSON.parse(await readBody(request));
-        const valid = checkPassword(user, config.adminUser) && config.adminPassword && checkPassword(password, config.adminPassword);
-        if (!valid) { recordFailedLogin(request); return json(response, 401, { error: "Usuário ou senha inválidos." }); }
+        const valid = checkPassword(user, config.adminUser) && config.adminPassword && verifyPasswordHash(password, config.adminPassword);
+        if (!valid) {
+          recordFailedLogin(request);
+          await store.log({ id: randomUUID(), status: "login_failed", user: String(user ?? "").slice(0, 60), ip: getClientIp(request), at: new Date().toISOString() });
+          return json(response, 401, { error: "Usuário ou senha inválidos." });
+        }
         clearLoginAttempts(request);
-        withCookie(response, createSessionCookie(user, config.sessionSecret, request));
+        withCookie(response, createSessionCookie(user, config.sessionSecret, request, config.adminPassword));
         withCookie(response, createCsrfCookie(request));
         return json(response, 200, { ok: true });
       }
@@ -175,7 +182,19 @@ export function createApp({ store, meta, config, serveStatic }) {
         const { brandName, brandHandle, brandTagline, brandTemplate, brandLogoUrl } = await store.getSettings();
         return json(response, 200, { brandName, brandHandle, brandTagline, brandTemplate, brandLogoUrl });
       }
-      if (requiresAuth(url.pathname, request.method) && !readSession(request, config.sessionSecret)) {
+      if (request.method === "POST" && url.pathname === "/api/meta/data-deletion") {
+        // Required by Meta Platform Terms for any app using Instagram/Facebook login:
+        // when someone revokes the app's permission, Meta calls this with a signed
+        // payload identifying them — honor it by erasing what we hold on that person.
+        const body = (await readBody(request)).toString("utf8");
+        const signedRequest = new URLSearchParams(body).get("signed_request");
+        const payload = parseSignedRequest(signedRequest, config.appSecret);
+        if (!payload?.user_id) return json(response, 400, { error: "signed_request inválido." });
+        await store.deleteContact(String(payload.user_id));
+        const confirmationCode = randomUUID();
+        return json(response, 200, { url: `https://${request.headers.host}/`, confirmation_code: confirmationCode });
+      }
+      if (requiresAuth(url.pathname, request.method) && !readSession(request, config.sessionSecret, config.adminPassword)) {
         return url.pathname.startsWith("/api/") ? json(response, 401, { error: "Sessão expirada. Faça login novamente." })
           : (response.writeHead(302, { Location: "/login.html" }), response.end());
       }
@@ -197,6 +216,16 @@ export function createApp({ store, meta, config, serveStatic }) {
         await store.addCampaign(campaign);
         return json(response, 201, campaign);
       }
+      if (request.method === "POST" && url.pathname === "/api/campaigns/preview") {
+        // prévia do que ainda não foi salvo — mesma validação e mesmo HTML das páginas públicas
+        const { view, ...input } = JSON.parse(await readBody(request));
+        if (String(input.contentHtml ?? "").length > MAX_RAW_CONTENT_LENGTH) return json(response, 400, { error: "Conteúdo muito longo." });
+        const campaign = createCampaign({ ...input, title: String(input.title ?? "").trim() || "Título da campanha", slug: "previa",
+          contentHtml: sanitizeHtml(input.contentHtml).trim() || "<p>O conteúdo da entrega aparece aqui.</p>" });
+        const settings = await store.getSettings();
+        const page = view === "content" ? renderContentPage(campaign, settings) : renderGatePage(campaign, settings, { preview: true });
+        return json(response, 200, { html: page });
+      }
       const campaignAdminPath = url.pathname.match(/^\/api\/campaigns\/([a-z0-9-]+)$/);
       if (campaignAdminPath && request.method === "PATCH") {
         const existing = await store.getCampaignBySlug(campaignAdminPath[1]);
@@ -213,7 +242,7 @@ export function createApp({ store, meta, config, serveStatic }) {
       }
       if (request.method === "GET" && url.pathname === "/api/leads") {
         const leads = await store.listLeads();
-        return json(response, 200, { leads: leads.map((lead) => ({ ...lead, score: scoreLead(lead) })) });
+        return json(response, 200, { leads: leads.map((lead) => ({ ...lead, score: scoreLead(lead), stale: isStale(lead) })) });
       }
       const leadAdminPath = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
       if (leadAdminPath && request.method === "PATCH") {
@@ -224,8 +253,12 @@ export function createApp({ store, meta, config, serveStatic }) {
         if (lead) void maybeNotifyStageChange(store, "lead", lead.id, lead.name, previousLead?.stage, lead);
         return lead ? json(response, 200, lead) : json(response, 404, { error: "Lead não encontrado." });
       }
+      if (leadAdminPath && request.method === "DELETE") {
+        await store.deleteLead(leadAdminPath[1]);
+        return json(response, 200, { ok: true });
+      }
       if (request.method === "GET" && url.pathname === "/webhook") {
-        const valid = Boolean(config.verifyToken) && url.searchParams.get("hub.mode") === "subscribe" && url.searchParams.get("hub.verify_token") === config.verifyToken;
+        const valid = Boolean(config.verifyToken) && url.searchParams.get("hub.mode") === "subscribe" && checkPassword(url.searchParams.get("hub.verify_token") ?? "", config.verifyToken);
         response.writeHead(valid ? 200 : 403, { "Content-Type": "text/plain" }); return response.end(valid ? url.searchParams.get("hub.challenge") ?? "" : "Forbidden");
       }
       if (request.method === "POST" && url.pathname === "/webhook") {
@@ -235,7 +268,12 @@ export function createApp({ store, meta, config, serveStatic }) {
         const comments = extractComments(payload);
         const messages = [...extractMessages(payload), ...extractPostbacks(payload)];
         response.writeHead(200); response.end("EVENT_RECEIVED");
-        void Promise.all([processComments(comments, store, meta), processMessages(messages, store, meta)]);
+        // fire-and-forget by design (the Meta webhook already got its 200) — but an
+        // unhandled rejection here would crash the whole process (Node kills the process
+        // on an uncaught unhandledRejection), so a single malformed event must never be
+        // allowed to take the instance down
+        void Promise.all([processComments(comments, store, meta), processMessages(messages, store, meta)])
+          .catch((error) => console.error("Falha ao processar evento de webhook:", error));
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/state") {
@@ -247,7 +285,7 @@ export function createApp({ store, meta, config, serveStatic }) {
       }
       if (request.method === "GET" && url.pathname === "/api/contacts") {
         const contacts = await store.listContacts();
-        return json(response, 200, { contacts: contacts.map((contact) => ({ ...contact, score: scoreContact(contact) })) });
+        return json(response, 200, { contacts: contacts.map((contact) => ({ ...contact, score: scoreContact(contact), stale: isStale(contact) })) });
       }
       if (request.method === "POST" && url.pathname === "/api/contacts/resync-usernames") {
         const contacts = await store.listContacts();
@@ -304,6 +342,10 @@ export function createApp({ store, meta, config, serveStatic }) {
           void maybeNotifyStageChange(store, "contact", contact.id, label, previousContact?.stage, contact);
         }
         return contact ? json(response, 200, contact) : json(response, 404, { error: "Contato não encontrado." });
+      }
+      if (request.method === "DELETE" && contactPath) {
+        await store.deleteContact(contactPath[1]);
+        return json(response, 200, { ok: true });
       }
       const contactActionPath = url.pathname.match(/^\/api\/contacts\/([^/]+)\/(messages|pause|mark-paid)$/);
       if (request.method === "POST" && contactActionPath?.[2] === "pause") {
@@ -449,6 +491,7 @@ export function createApp({ store, meta, config, serveStatic }) {
 
 export async function processComments(comments, store, meta) {
   for (const comment of comments) {
+    try {
     if (!(await store.claimEvent(comment.id))) continue;
     let username = comment.username || null;
     if (!username && comment.authorId) {
@@ -503,11 +546,17 @@ export async function processComments(comments, store, meta) {
       await store.log({ ...context, status: "sent", ruleId: rule.id, rule: rule.name, awaitingReply: rule.followUpEnabled });
     }
     catch (error) { await store.log({ ...context, status: "failed", ruleId: rule.id, rule: rule.name, error: error.message }); }
+    } catch (error) {
+      // covers failures before the inner try (claimEvent, recordContactEvent, findMatchingRule...) —
+      // one malformed comment must never stop the rest of the batch from being processed
+      console.error("Falha ao processar comentário:", comment.id, error);
+    }
   }
 }
 
 async function processMessages(messages, store, meta) {
   for (const message of messages) {
+    try {
     if (!(await store.claimEvent(message.id))) continue;
     const existing = await store.getContact(message.senderId);
     let username = existing?.username || null;
@@ -540,6 +589,9 @@ async function processMessages(messages, store, meta) {
     } catch (error) {
       await store.log({ id: message.id, status: "failed", ruleId: delivery.ruleId, username, text: "Falha ao entregar link",
         rule: delivery.ruleName, error: error.message, at: new Date().toISOString() });
+    }
+    } catch (error) {
+      console.error("Falha ao processar mensagem:", message.id, error);
     }
   }
 }

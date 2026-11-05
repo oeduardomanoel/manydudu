@@ -1,4 +1,4 @@
-const ALLOWED_TAGS = new Set(["P", "BR", "STRONG", "B", "EM", "I", "U", "A", "H2", "H3", "UL", "OL", "LI", "BLOCKQUOTE", "HR", "SPAN", "DIV"]);
+const ALLOWED_TAGS = new Set(["P", "BR", "STRONG", "B", "EM", "I", "U", "A", "H2", "H3", "UL", "OL", "LI", "BLOCKQUOTE", "HR", "SPAN", "DIV", "PRE", "CODE", "IMG"]);
 const ALLOWED_HREF_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
 function isSafeHref(value) {
@@ -9,26 +9,38 @@ function isSafeHref(value) {
   }
 }
 
+function isSafeImageSrc(value) {
+  try {
+    return new URL(String(value ?? "")).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 // Tags fora da allowlist que carregam estrutura de bloco — em vez de só desembrulhar (e grudar
 // tudo num parágrafo só), viram o equivalente permitido mais próximo.
-const RENAME_TAGS = { H1: "H2", H4: "H3", H5: "H3", H6: "H3", PRE: "P", SECTION: "DIV", ARTICLE: "DIV", HEADER: "DIV",
+const RENAME_TAGS = { H1: "H2", H4: "H3", H5: "H3", H6: "H3", SECTION: "DIV", ARTICLE: "DIV", HEADER: "DIV",
   FOOTER: "DIV", MAIN: "DIV", ASIDE: "DIV", FIGURE: "DIV", TABLE: "DIV", TBODY: "DIV", THEAD: "DIV", TR: "P", DT: "P", DD: "P" };
-const BLOCK_TAG = /<(p|br|h2|h3|ul|ol|li|blockquote|div|hr)\b/i;
+const BLOCK_TAG = /<(p|br|h2|h3|ul|ol|li|blockquote|div|hr|pre)\b/i;
 const SEMANTIC_TAG = /<(h[1-6]|ul|ol|strong|b|em|i|blockquote)\b/i;
 const MARKDOWN_HINT = /^\s*(#{1,6}\s|[-*•+]\s|\d+[.)]\s|>\s?|```|(-{3,}|\*{3,}|_{3,})\s*$)|\*\*[^*]+\*\*/m;
 
-function renameElement(element, tagName) {
-  if (element.tagName === "PRE") {
-    // quebras de linha de <pre> só existem por causa do white-space — fora dele somem, então viram <br>
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    const texts = [];
-    while (walker.nextNode()) texts.push(walker.currentNode);
-    for (const text of texts) {
-      const parts = text.textContent.split("\n");
-      if (parts.length < 2) continue;
-      text.replaceWith(...parts.flatMap((part, index) => index ? [document.createElement("br"), part] : [part]));
+// innerText não serve aqui: o wrapper do sanitizeFragment está fora do documento, e aí <br> e
+// blocos internos (o contentEditable cria <div>/<br> dentro do <pre>) não viram quebra de linha.
+function preformattedText(node) {
+  let text = "";
+  for (const child of node.childNodes) {
+    if (child.nodeType === Node.TEXT_NODE) text += child.textContent;
+    else if (child.nodeName === "BR") text += "\n";
+    else if (child.nodeType === Node.ELEMENT_NODE) {
+      const inner = preformattedText(child);
+      text += /^(DIV|P|LI)$/.test(child.nodeName) && text && !text.endsWith("\n") ? `\n${inner}` : inner;
     }
   }
+  return text;
+}
+
+function renameElement(element, tagName) {
   const replacement = document.createElement(tagName);
   replacement.append(...element.childNodes);
   element.replaceWith(replacement);
@@ -48,7 +60,17 @@ function cleanChild(child) {
     children.forEach(cleanChild);
     return;
   }
+  if (child.tagName === "IMG" && !isSafeImageSrc(child.getAttribute("src"))) { child.remove(); return; }
+  if (child.tagName === "PRE") {
+    // bloco de prompt guarda só o texto (com as quebras de linha) — formatação de dentro não faz sentido ali
+    const code = document.createElement("code");
+    code.textContent = preformattedText(child).replace(/\n+$/, "");
+    child.replaceChildren(code);
+    for (const attr of [...child.attributes]) child.removeAttribute(attr.name);
+    return;
+  }
   for (const attr of [...child.attributes]) {
+    if (child.tagName === "IMG" && (attr.name === "src" || attr.name === "alt")) continue;
     if (child.tagName === "A" && attr.name === "href") { if (!isSafeHref(attr.value)) child.removeAttribute("href"); continue; }
     if (child.tagName === "A" && attr.name === "target" && attr.value === "_blank") continue;
     if (child.tagName === "OL" && attr.name === "start" && /^\d{1,4}$/.test(attr.value)) continue;
@@ -59,10 +81,12 @@ function cleanChild(child) {
   [...child.childNodes].forEach(cleanChild);
 }
 
+// <template> é inerte: o HTML colado não baixa imagem nem dispara onerror/onload antes da limpeza
+// (numa <div> solta, o navegador já começa a carregar cada <img> no momento do innerHTML).
 export function sanitizeFragment(html) {
-  const wrapper = document.createElement("div");
+  const wrapper = document.createElement("template");
   wrapper.innerHTML = html;
-  [...wrapper.childNodes].forEach(cleanChild);
+  [...wrapper.content.childNodes].forEach(cleanChild);
   return wrapper.innerHTML;
 }
 
@@ -104,7 +128,7 @@ export function plainTextToHtml(text) {
   let paragraph = [];
   let quote = [];
   let list = null;
-  let fence = false;
+  let fence = null;
   const flushParagraph = () => { if (paragraph.length) out.push(`<p>${paragraph.join("<br>")}</p>`); paragraph = []; };
   const flushQuote = () => { if (quote.length) out.push(`<blockquote>${quote.join("<br>")}</blockquote>`); quote = []; };
   const flushList = () => { if (list) out.push(`<${list.type}${list.start > 1 ? ` start="${list.start}"` : ""}>${list.items.map((item) => `<li>${item}</li>`).join("")}</${list.type}>`); list = null; };
@@ -112,8 +136,13 @@ export function plainTextToHtml(text) {
 
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    if (/^\s*```/.test(line)) { flushAll(); fence = !fence; continue; }
-    if (fence) { paragraph.push(escapeHtml(line) || "&nbsp;"); continue; }
+    // ``` vira bloco de prompt (com botão "Copiar" na página de entrega), preservando as linhas
+    if (/^\s*```/.test(line)) {
+      flushAll();
+      if (fence) { out.push(`<pre><code>${fence.map(escapeHtml).join("\n")}</code></pre>`); fence = null; } else fence = [];
+      continue;
+    }
+    if (fence) { fence.push(line); continue; }
     if (!line.trim()) {
       flushParagraph(); flushQuote();
       // lista separada por linha em branco ("1. a\n\n2. b") continua sendo uma lista só
@@ -139,6 +168,7 @@ export function plainTextToHtml(text) {
     if (list) flushList();
     paragraph.push(formatInline(line.trim()));
   }
+  if (fence) out.push(`<pre><code>${fence.map(escapeHtml).join("\n")}</code></pre>`);
   flushAll();
   return out.join("") || "<p></p>";
 }
@@ -270,6 +300,13 @@ export function wireToolbar(toolbar, editor) {
       const url = window.prompt("Link (https://...)");
       if (!url) return;
       document.execCommand("createLink", false, url);
+      return;
+    }
+    if (command === "insertImage") {
+      const url = window.prompt("Endereço da imagem (https://...)");
+      if (!url) return;
+      if (!isSafeImageSrc(url.trim())) { window.alert("Use um endereço de imagem que comece com https://"); return; }
+      document.execCommand("insertImage", false, url.trim());
       return;
     }
     document.execCommand(command, false, value || undefined);

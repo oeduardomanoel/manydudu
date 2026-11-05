@@ -1,5 +1,5 @@
 import { escapeHtml } from "../util/html.js";
-import { DEFAULT_INTEREST_LABEL, DEFAULT_NICHES } from "../domain/campaigns.js";
+import { DEFAULT_INTEREST_LABEL, DEFAULT_NICHES, isSafeCtaUrl } from "../domain/campaigns.js";
 
 const THEME_FILES = { azul: "/theme-azul.css", verde: "/theme-verde.css", roxo: "/theme-roxo.css" };
 const DEFAULT_TAGLINE = "Automação que conversa, conteúdo que entrega.";
@@ -28,30 +28,57 @@ export function renderNotFound(settings = {}) {
   </body></html>`;
 }
 
-export function renderGatePage(campaign, settings = {}) {
+const DEFAULT_GATE_SUB = "Responda algumas perguntas rápidas e o conteúdo é liberado na hora.";
+
+// O formulário vem inteiro no HTML (funciona sem JS); o /campaign.js transforma cada .gate-step
+// numa tela, com barra de progresso — uma pergunta por vez no celular de quem chega pela DM.
+export function renderGatePage(campaign, settings = {}, { preview = false } = {}) {
   const brand = resolveBrand(settings);
   const niches = campaign.niches?.length ? campaign.niches : DEFAULT_NICHES;
   const interestLabel = campaign.interestLabel || DEFAULT_INTEREST_LABEL;
+  const benefits = Array.isArray(campaign.benefits) ? campaign.benefits.filter(Boolean) : [];
   return `<!doctype html><html lang="pt-BR"><head>${HEAD(campaign.title, brand.themeHref)}</head><body class="gate-body">
   <div class="gate-shell">
     <div class="gate-brand-pane"><p class="eyebrow">${escapeHtml(brand.name)}</p><p class="gate-marketing">${escapeHtml(brand.tagline)}</p>${brand.handle ? `<span class="gate-handle">@${escapeHtml(brand.handle)}</span>` : ""}</div>
-    <div class="gate-card">
-      <p class="eyebrow">${eyebrow(brand)}</p>
-      <h1>${escapeHtml(campaign.title)}</h1>
-      <p class="gate-sub">Preencha os dados abaixo para liberar o conteúdo.</p>
-      <form id="lead-form" class="gate-form">
-        <label>Nome<input name="name" required maxlength="120" placeholder="Seu nome"></label>
-        <label>WhatsApp<input name="whatsapp" required maxlength="30" placeholder="(11) 91234-5678"></label>
-        <label>E-mail<input name="email" type="email" required maxlength="160" placeholder="voce@email.com"></label>
-        <fieldset class="gate-niches"><legend>Qual seu nicho?</legend>
+    <div class="gate-card" id="gate-card">
+      <div class="gate-intro">
+        <p class="eyebrow">${eyebrow(brand)}</p>
+        <h1>${escapeHtml(campaign.title)}</h1>
+        <p class="gate-sub">${escapeHtml(campaign.subtitle || DEFAULT_GATE_SUB)}</p>
+        ${benefits.length ? `<div class="gate-benefits"><p>O que você vai receber</p><ul>${benefits.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
+      </div>
+      <div class="gate-progress" id="gate-progress" hidden><div class="gate-progress-bar"><i></i></div><span aria-live="polite"></span></div>
+      <form id="lead-form" class="gate-form"${preview ? ' data-preview="1"' : ""}>
+        <div class="gate-step">
+          <label for="lead-name">Como você se chama?</label>
+          <input id="lead-name" name="name" required maxlength="120" autocomplete="name" autocapitalize="words" placeholder="Seu nome">
+        </div>
+        <div class="gate-step">
+          <label for="lead-whatsapp">Qual o seu WhatsApp?</label>
+          <input id="lead-whatsapp" name="whatsapp" type="tel" inputmode="tel" required maxlength="30" autocomplete="tel" placeholder="(11) 91234-5678">
+          <small class="gate-help">Com DDD.</small>
+        </div>
+        <div class="gate-step">
+          <label for="lead-email">E o seu melhor e-mail?</label>
+          <input id="lead-email" name="email" type="email" inputmode="email" required maxlength="160" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="voce@email.com">
+        </div>
+        <fieldset class="gate-step gate-niches"><legend>Qual o seu nicho?</legend>
+          <small class="gate-help">Pode marcar mais de um.</small>
           <div class="pill-group">${niches.map((niche) => `<label class="pill"><input type="checkbox" name="niches" value="${escapeHtml(niche)}"><span>${escapeHtml(niche)}</span></label>`).join("")}</div>
-          <input name="nicheOther" class="niche-other" hidden maxlength="120" placeholder="Qual é o seu nicho?">
+          <input name="nicheOther" class="niche-other" hidden maxlength="120" placeholder="Qual é o seu nicho?" aria-label="Qual é o seu nicho?">
         </fieldset>
-        <label>${escapeHtml(interestLabel)}<textarea name="automationInterest" required maxlength="600" placeholder="Ex.: responder comentários e enviar material automaticamente"></textarea></label>
+        <div class="gate-step">
+          <label for="lead-interest">${escapeHtml(interestLabel)}</label>
+          <textarea id="lead-interest" name="automationInterest" required maxlength="600" placeholder="Escreva em poucas palavras"></textarea>
+          <label class="gate-consent"><input type="checkbox" name="consent" required><span>Concordo em ser contatado(a) e que meus dados sejam usados pra esse fim.</span></label>
+        </div>
         <input type="hidden" name="slug" value="${escapeHtml(campaign.slug)}">
         <label class="hp-field" aria-hidden="true">Empresa<input name="company" tabindex="-1" autocomplete="off"></label>
-        <button class="primary wide" type="submit">Quero acessar →</button>
         <p class="form-error" id="form-error" role="alert"></p>
+        <div class="gate-nav">
+          <button class="gate-back" type="button" hidden>← Voltar</button>
+          <button class="primary" type="submit">Quero acessar →</button>
+        </div>
       </form>
     </div>
   </div>
@@ -59,16 +86,42 @@ export function renderGatePage(campaign, settings = {}) {
   </body></html>`;
 }
 
+const stripTags = (html) => html.replace(/<[^>]*>/g, "").replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+
+// Os <h2> do conteúdo viram âncoras e, com 3 ou mais, um índice no topo — conteúdo longo
+// (lista de prompts, passo a passo) fica navegável no celular.
+function withTableOfContents(contentHtml) {
+  const headings = [];
+  const html = String(contentHtml ?? "").replace(/<h2>([\s\S]*?)<\/h2>/g, (match, inner) => {
+    const text = stripTags(inner);
+    if (!text) return match;
+    headings.push(text);
+    return `<h2 id="parte-${headings.length}">${inner}</h2>`;
+  });
+  const toc = headings.length >= 3
+    ? `<nav class="gate-toc" aria-label="Nesta página"><p>Nesta página</p><ul>${headings.map((text, index) => `<li><a href="#parte-${index + 1}">${text}</a></li>`).join("")}</ul></nav>`
+    : "";
+  return { html, toc };
+}
+
 export function renderContentPage(campaign, settings = {}) {
   const brand = resolveBrand(settings);
+  const { html, toc } = withTableOfContents(campaign.contentHtml);
+  const cta = campaign.ctaLabel && isSafeCtaUrl(campaign.ctaUrl)
+    ? `<a class="primary gate-cta" href="${escapeHtml(campaign.ctaUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(campaign.ctaLabel)} →</a>` : "";
+  const follow = brand.handle ? `<a class="gate-instagram" href="https://www.instagram.com/${encodeURIComponent(brand.handle)}/" target="_blank" rel="noopener">Seguir @${escapeHtml(brand.handle)} →</a>` : "";
   return `<!doctype html><html lang="pt-BR"><head>${HEAD(campaign.title, brand.themeHref)}</head><body class="gate-body">
   <div class="gate-shell gate-shell--content">
-    <div class="gate-card gate-card--content">
+    <article class="gate-card gate-card--content">
       <p class="eyebrow">${eyebrow(brand)}</p>
+      <span class="gate-unlocked">✓ Conteúdo liberado</span>
       <h1>${escapeHtml(campaign.title)}</h1>
-      <div class="gate-content">${campaign.contentHtml}</div>
-      ${brand.handle ? `<a class="gate-instagram" href="https://www.instagram.com/${encodeURIComponent(brand.handle)}/" target="_blank" rel="noopener">Seguir @${escapeHtml(brand.handle)} →</a>` : ""}
-    </div>
+      ${campaign.subtitle ? `<p class="gate-sub">${escapeHtml(campaign.subtitle)}</p>` : ""}
+      ${toc}
+      <div class="gate-content">${html}</div>
+      ${cta || follow ? `<div class="gate-actions">${cta}${follow}</div>` : ""}
+    </article>
   </div>
+  <script src="/campaign.js"></script>
   </body></html>`;
 }

@@ -26,6 +26,10 @@ test("raw HTML in pasted text is escaped, not interpreted", () => {
   assert.equal(plainTextToHtml("<img src=x onerror=alert(1)>"), "<p>&lt;img src=x onerror=alert(1)&gt;</p>");
 });
 
-test("fenced code keeps its lines without markdown parsing", () => {
-  assert.equal(plainTextToHtml("```\n# not a title\nnpx add\n```"), "<p># not a title<br>npx add</p>");
+test("fenced code becomes a prompt block that keeps its lines without markdown parsing", () => {
+  assert.equal(plainTextToHtml("```\n# not a title\nnpx add\n```"), "<pre><code># not a title\nnpx add</code></pre>");
+});
+
+test("fenced code escapes HTML and survives a missing closing fence", () => {
+  assert.equal(plainTextToHtml("Antes\n\n```\n<b>x</b>"), "<p>Antes</p><pre><code>&lt;b&gt;x&lt;/b&gt;</code></pre>");
 });

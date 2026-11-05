@@ -7,7 +7,7 @@ const MAX_RAW_CONTENT_LENGTH = 200_000;
 const RULE_FIELDS = ["name", "keyword", "match", "reply", "publicReplies", "responseMode", "enabled",
   "followUpEnabled", "followUpText", "followUpUrl", "requireFollow", "followPrompt", "deliveryStyle", "buttonTitle",
   "initialQuickReplyEnabled", "initialQuickReplyTitle", "profileUrl", "followButtonTitle", "confirmFollowTitle"];
-const CAMPAIGN_FIELDS = ["title", "contentHtml", "active"];
+const CAMPAIGN_FIELDS = ["title", "contentHtml", "subtitle", "benefits", "ctaLabel", "ctaUrl", "active"];
 
 export function exportPackage(rule, campaign = null) {
   const ruleData = Object.fromEntries(RULE_FIELDS.map((key) => [key, rule[key]]));

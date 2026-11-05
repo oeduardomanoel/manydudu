@@ -1,5 +1,6 @@
 import { createEditor, wireToolbar } from "/editor.js";
 import { checkOnboarding } from "/onboarding.js";
+import "/carousel.js";
 
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
@@ -223,12 +224,87 @@ async function loadCampaigns() {
   renderCampaigns();
 }
 
+const campaignUrl = (slug) => `${window.location.origin}/c/${slug}`;
+const campaignTitle = (slug) => state.campaigns.find((item) => item.slug === slug)?.title || slug;
+const formatDate = (iso) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "";
+// mesma lista padrão do servidor (DEFAULT_NICHES) — sem o "Outro", que o servidor sempre acrescenta no fim
+const DEFAULT_CAMPAIGN_NICHES = ["Estética", "Saúde e bem-estar", "Educação", "Imobiliário", "Coach / Mentoria", "E-commerce", "Serviços locais"];
+let leadsFilter = "";
+let campaignNiches = [];
+let campaignPreviewView = "form";
+let campaignPreviewTimer = null;
+
 function renderCampaigns() {
-  $("#campaigns-list").innerHTML = state.campaigns.length ? state.campaigns.map((campaign) => `<article class="campaign-row">
+  const leadCounts = state.leads.reduce((counts, lead) => counts.set(lead.campaignSlug, (counts.get(lead.campaignSlug) || 0) + 1), new Map());
+  $("#campaigns-list").innerHTML = state.campaigns.length ? state.campaigns.map((campaign) => {
+    const leads = leadCounts.get(campaign.slug) || 0;
+    const slug = escapeHtml(campaign.slug);
+    return `<article class="campaign-row">
     <div><h3>${escapeHtml(campaign.title)} <span class="campaign-status ${campaign.active ? "active" : "inactive"}">${campaign.active ? "ATIVA" : "PAUSADA"}</span></h3>
-    <p><a href="/c/${escapeHtml(campaign.slug)}" target="_blank">manydudu.com/c/${escapeHtml(campaign.slug)}</a></p></div>
-    <div class="rule-actions"><button class="edit-rule" data-edit-campaign="${escapeHtml(campaign.slug)}">Editar</button><button class="icon-btn" data-delete-campaign="${escapeHtml(campaign.slug)}" title="Excluir">×</button></div>
-  </article>`).join("") : '<p class="empty">Nenhuma campanha ainda.<br>Crie uma para entregar conteúdo após capturar o lead.</p>';
+    <p><a href="/c/${slug}" target="_blank" rel="noopener">${escapeHtml(campaignUrl(campaign.slug).replace(/^https?:\/\//, ""))}</a></p>
+    <p class="campaign-meta"><button type="button" class="link-btn" data-campaign-leads="${slug}">${leads} ${leads === 1 ? "lead" : "leads"}</button> · criada em ${escapeHtml(formatDate(campaign.createdAt))}</p></div>
+    <div class="rule-actions"><button class="edit-rule" data-copy-campaign="${slug}">Copiar link</button><button class="edit-rule" data-edit-campaign="${slug}">Editar</button><button class="icon-btn" data-delete-campaign="${slug}" title="Excluir">×</button></div>
+  </article>`;
+  }).join("") : '<p class="empty">Nenhuma campanha ainda.<br>Crie uma para entregar conteúdo após capturar o lead.</p>';
+  renderLeadsFilter();
+}
+
+function renderNicheChips() {
+  $("#niche-chip-list").innerHTML = campaignNiches.map((niche, index) => `<span class="chip">${escapeHtml(niche)}<button type="button" data-remove-niche="${index}" aria-label="Remover ${escapeHtml(niche)}">×</button></span>`).join("")
+    + '<span class="chip chip-fixed" title="Sempre aparece no fim">Outro</span>';
+}
+
+function addNiches(raw) {
+  for (const niche of String(raw).split(",").map((item) => item.trim().slice(0, 40)).filter(Boolean)) {
+    if (niche.toLowerCase() === "outro" || campaignNiches.some((item) => item.toLowerCase() === niche.toLowerCase())) continue;
+    if (campaignNiches.length >= 11) { $("#campaign-form-error").textContent = "Use no máximo 11 opções de nicho (mais o \"Outro\")."; break; }
+    campaignNiches.push(niche);
+  }
+  renderNicheChips();
+}
+
+function switchCampaignTab(tab) {
+  document.querySelectorAll("[data-campaign-tab]").forEach((button) => {
+    const active = button.dataset.campaignTab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.querySelectorAll("[data-campaign-panel]").forEach((panel) => { panel.hidden = panel.dataset.campaignPanel !== tab; });
+  // a prévia acompanha a aba: formulário mostra o formulário, entrega mostra a página final
+  if (tab !== "basico") setCampaignPreviewView(tab === "entrega" ? "content" : "form");
+}
+
+function campaignPayload() {
+  const form = $("#campaign-form");
+  return {
+    title: form.elements.title.value, slug: form.elements.slug.value || undefined, active: form.elements.active.checked,
+    contentHtml: campaignEditor.getHtml(), interestLabel: form.elements.interestLabel.value, niches: campaignNiches,
+    subtitle: form.elements.subtitle.value,
+    benefits: form.elements.benefits.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+    ctaLabel: form.elements.ctaLabel.value, ctaUrl: form.elements.ctaUrl.value,
+  };
+}
+
+async function refreshCampaignPreview() {
+  if (!$("#campaign-dialog").open) return;
+  const status = $("#campaign-preview-status");
+  try {
+    const { html } = await request("/api/campaigns/preview", { method: "POST", body: JSON.stringify({ ...campaignPayload(), view: campaignPreviewView }) });
+    $("#campaign-preview-frame").srcdoc = html;
+    status.textContent = "";
+  } catch (error) { status.textContent = `· ${error.message}`; }
+}
+
+function scheduleCampaignPreview() {
+  clearTimeout(campaignPreviewTimer);
+  campaignPreviewTimer = setTimeout(refreshCampaignPreview, 500);
+}
+
+function setCampaignPreviewView(view) {
+  if (campaignPreviewView === view) return;
+  campaignPreviewView = view;
+  document.querySelectorAll("[data-preview-view]").forEach((button) => button.classList.toggle("active", button.dataset.previewView === view));
+  scheduleCampaignPreview();
 }
 
 function openCampaignDialog(campaign = null) {
@@ -239,30 +315,71 @@ function openCampaignDialog(campaign = null) {
   form.elements.slug.value = campaign?.slug || "";
   form.elements.slug.readOnly = Boolean(campaign);
   form.elements.slug.placeholder = campaign ? "" : "gerado a partir do título";
+  $("#campaign-slug-prefix").textContent = `${window.location.host}/c/`;
   form.elements.active.checked = campaign ? campaign.active : true;
+  form.elements.subtitle.value = campaign?.subtitle || "";
+  form.elements.benefits.value = (campaign?.benefits || []).join("\n");
   form.elements.interestLabel.value = campaign?.interestLabel || "";
-  form.elements.niches.value = (campaign?.niches || []).join(", ");
+  form.elements.ctaLabel.value = campaign?.ctaLabel || "";
+  form.elements.ctaUrl.value = campaign?.ctaUrl || "";
+  campaignNiches = (campaign?.niches?.length ? campaign.niches : DEFAULT_CAMPAIGN_NICHES).filter((niche) => niche.toLowerCase() !== "outro");
+  renderNicheChips();
   campaignEditor.setHtml(campaign?.contentHtml || "");
   $("#campaign-dialog-mode").textContent = campaign ? "EDITAR CAMPANHA" : "NOVA CAMPANHA";
   $("#save-campaign").textContent = campaign ? "Salvar alterações →" : "Criar campanha →";
   $("#campaign-form-error").textContent = "";
+  switchCampaignTab("basico");
+  campaignPreviewView = "form";
+  document.querySelectorAll("[data-preview-view]").forEach((button) => button.classList.toggle("active", button.dataset.previewView === "form"));
   $("#campaign-dialog").showModal();
+  refreshCampaignPreview();
 }
 
 async function loadLeads() {
   const result = await request("/api/leads");
   state.leads = result.leads;
   renderLeads();
+  renderCampaigns();
 }
 
+function renderLeadsFilter() {
+  const select = $("#leads-filter");
+  const slugs = [...new Set([...state.campaigns.map((campaign) => campaign.slug), ...state.leads.map((lead) => lead.campaignSlug)])];
+  if (leadsFilter && !slugs.includes(leadsFilter)) leadsFilter = "";
+  select.innerHTML = `<option value="">Todas as campanhas</option>${slugs.map((slug) => `<option value="${escapeHtml(slug)}">${escapeHtml(campaignTitle(slug))}</option>`).join("")}`;
+  select.value = leadsFilter;
+}
+
+const filteredLeads = () => leadsFilter ? state.leads.filter((lead) => lead.campaignSlug === leadsFilter) : state.leads;
+
 function renderLeads() {
-  $("#leads-total").textContent = `${state.leads.length} ${state.leads.length === 1 ? "lead" : "leads"}`;
-  $("#leads-list").innerHTML = state.leads.length ? state.leads.map((lead) => `<article class="lead-row">
-    <strong>${escapeHtml(lead.name)}</strong>
-    <span>${escapeHtml(lead.whatsapp)} · ${escapeHtml(lead.email)} · campanha: ${escapeHtml(lead.campaignSlug)}</span>
+  const leads = filteredLeads();
+  $("#leads-total").textContent = `${leads.length} ${leads.length === 1 ? "lead" : "leads"}`;
+  $("#leads-list").innerHTML = leads.length ? leads.map((lead) => {
+    const whatsapp = whatsappLink(lead.whatsapp);
+    return `<article class="lead-row">
+    <div class="lead-row-head"><strong>${escapeHtml(lead.name)}</strong><time>${escapeHtml(formatDate(lead.createdAt))}</time></div>
+    <span>${whatsapp ? `<a href="${escapeHtml(whatsapp)}" target="_blank" rel="noopener">${escapeHtml(lead.whatsapp)}</a>` : escapeHtml(lead.whatsapp)} · ${escapeHtml(lead.email)} · ${escapeHtml(campaignTitle(lead.campaignSlug))}</span>
     <span>${escapeHtml(lead.automationInterest)}</span>
     <div class="lead-niches">${lead.niches.map((niche) => `<span>${escapeHtml(niche === "Outro" && lead.nicheOther ? lead.nicheOther : niche)}</span>`).join("")}</div>
-  </article>`).join("") : '<p class="empty">Nenhum lead capturado ainda.</p>';
+  </article>`;
+  }).join("") : `<p class="empty">${leadsFilter ? "Nenhum lead nessa campanha ainda." : "Nenhum lead capturado ainda."}</p>`;
+}
+
+// Excel em português abre ";" como separador de colunas; o BOM faz ele ler os acentos certo.
+function exportLeadsCsv() {
+  const cell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const header = ["Data", "Nome", "WhatsApp", "E-mail", "Campanha", "Nicho", "Resposta", "Etapa"];
+  const rows = filteredLeads().map((lead) => [
+    lead.createdAt ? new Date(lead.createdAt).toLocaleString("pt-BR") : "", lead.name, lead.whatsapp, lead.email, campaignTitle(lead.campaignSlug),
+    lead.niches.map((niche) => niche === "Outro" && lead.nicheOther ? lead.nicheOther : niche).join(", "), lead.automationInterest, lead.stage || "novo",
+  ]);
+  const csv = [header, ...rows].map((row) => row.map(cell).join(";")).join("\r\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" }));
+  link.download = `leads-${leadsFilter || "todas"}-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 function buildPipelineItems() {
@@ -781,21 +898,70 @@ $("#new-campaign").addEventListener("click", () => openCampaignDialog());
 $("#campaigns-list").addEventListener("click", async (event) => {
   const edit = event.target.closest("[data-edit-campaign]")?.dataset.editCampaign;
   const remove = event.target.closest("[data-delete-campaign]")?.dataset.deleteCampaign;
+  const copy = event.target.closest("[data-copy-campaign]");
+  const showLeads = event.target.closest("[data-campaign-leads]")?.dataset.campaignLeads;
   if (edit) { const campaign = state.campaigns.find((item) => item.slug === edit); if (campaign) openCampaignDialog(campaign); return; }
+  if (copy) {
+    try { await navigator.clipboard.writeText(campaignUrl(copy.dataset.copyCampaign)); copy.textContent = "Copiado ✓"; }
+    catch { window.prompt("Copie o link:", campaignUrl(copy.dataset.copyCampaign)); }
+    setTimeout(() => { copy.textContent = "Copiar link"; }, 1800);
+    return;
+  }
+  if (showLeads) { leadsFilter = showLeads; renderLeadsFilter(); renderLeads(); $("#leads").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   if (remove && confirm("Excluir esta campanha? Os leads já capturados continuam salvos.")) {
     await request(`/api/campaigns/${remove}`, { method: "DELETE" });
     await loadCampaigns();
   }
 });
+$("#leads-filter").addEventListener("change", (event) => { leadsFilter = event.target.value; renderLeads(); });
+$("#export-leads").addEventListener("click", exportLeadsCsv);
+document.querySelector(".campaign-tabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-campaign-tab]")?.dataset.campaignTab;
+  if (tab) switchCampaignTab(tab);
+});
+document.querySelector(".preview-toggle").addEventListener("click", (event) => {
+  const view = event.target.closest("[data-preview-view]")?.dataset.previewView;
+  if (view) setCampaignPreviewView(view);
+});
+$("#niche-input").addEventListener("keydown", (event) => {
+  const input = event.currentTarget;
+  if (event.key === "Enter" || event.key === ",") {
+    event.preventDefault();
+    if (input.value.trim()) { addNiches(input.value); input.value = ""; scheduleCampaignPreview(); }
+  } else if (event.key === "Backspace" && !input.value && campaignNiches.length) {
+    campaignNiches.pop(); renderNicheChips(); scheduleCampaignPreview();
+  }
+});
+$("#niche-input").addEventListener("paste", (event) => {
+  const text = event.clipboardData.getData("text/plain");
+  if (!/[,\n]/.test(text)) return;
+  event.preventDefault();
+  addNiches(text.replace(/\r?\n/g, ","));
+  scheduleCampaignPreview();
+});
+$("#niche-input").addEventListener("blur", (event) => {
+  if (!event.currentTarget.value.trim()) return;
+  addNiches(event.currentTarget.value); event.currentTarget.value = ""; scheduleCampaignPreview();
+});
+$("#niche-chips").addEventListener("click", (event) => {
+  const index = event.target.closest("[data-remove-niche]")?.dataset.removeNiche;
+  if (index !== undefined) { campaignNiches.splice(Number(index), 1); renderNicheChips(); scheduleCampaignPreview(); return; }
+  $("#niche-input").focus();
+});
+$("#niche-defaults").addEventListener("click", () => { campaignNiches = [...DEFAULT_CAMPAIGN_NICHES]; renderNicheChips(); scheduleCampaignPreview(); });
+// o editor fica dentro do form, então o "input" dele também chega aqui
+$("#campaign-form").addEventListener("input", scheduleCampaignPreview);
+// validação fica com o servidor: com abas, o navegador tentaria focar um campo obrigatório escondido e travaria o envio sem mensagem
+$("#campaign-form").noValidate = true;
 $("#campaign-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   $("#campaign-form-error").textContent = "";
-  const niches = form.elements.niches.value.split(",").map((niche) => niche.trim()).filter(Boolean);
-  const payload = { title: form.elements.title.value, slug: form.elements.slug.value || undefined, active: form.elements.active.checked, contentHtml: campaignEditor.getHtml(), interestLabel: form.elements.interestLabel.value, niches };
+  const pending = $("#niche-input").value.trim();
+  if (pending) { addNiches(pending); $("#niche-input").value = ""; }
   const slug = form.dataset.slug;
   try {
-    await request(slug ? `/api/campaigns/${slug}` : "/api/campaigns", { method: slug ? "PATCH" : "POST", body: JSON.stringify(payload) });
+    await request(slug ? `/api/campaigns/${slug}` : "/api/campaigns", { method: slug ? "PATCH" : "POST", body: JSON.stringify(campaignPayload()) });
     $("#campaign-dialog").close();
     await loadCampaigns();
   } catch (error) { $("#campaign-form-error").textContent = error.message; }
