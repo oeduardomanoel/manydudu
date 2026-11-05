@@ -118,3 +118,28 @@ test("replaces an existing rule and reports a missing id", async (t) => {
   assert.equal((await store.read()).rules[0].keyword, "depois");
   assert.equal(await store.replaceRule("missing", { id: "missing" }), false);
 });
+
+test("deleteContact removes the contact so a data-deletion request can actually be honored", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "manydudu-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const store = new JsonStore(join(directory, "db.json"));
+  await store.initialize();
+  await store.recordContactEvent({ contactId: "user-1", username: "ana", type: "message", text: "oi", at: "2026-08-01T00:00:00.000Z" });
+  assert.notEqual(await store.getContact("user-1"), null);
+  await store.deleteContact("user-1");
+  assert.equal(await store.getContact("user-1"), null);
+  await store.deleteContact("never-existed"); // must not throw
+});
+
+test("deleteLead removes only the matching lead", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "manydudu-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const store = new JsonStore(join(directory, "db.json"));
+  await store.initialize();
+  await store.addLead({ id: "lead-1", name: "Ana" });
+  await store.addLead({ id: "lead-2", name: "Bea" });
+  await store.deleteLead("lead-1");
+  const leads = await store.listLeads();
+  assert.equal(leads.length, 1);
+  assert.equal(leads[0].id, "lead-2");
+});

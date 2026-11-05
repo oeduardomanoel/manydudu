@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import {
   parseCookies, createSessionCookie, readSession, createAccessCookie, readAccessSlugs, checkPassword,
   isLoginRateLimited, recordFailedLogin, clearLoginAttempts, isLeadRateLimited, recordLeadSubmission,
+  getClientIp, hashPassword, verifyPasswordHash,
 } from "../src/auth.js";
 
 const SECRET = "test-secret-with-plenty-of-entropy-for-hmac";
 const fakeRequest = (cookieHeader) => ({ headers: { cookie: cookieHeader } });
-const fakeRequestFromIp = (ip) => ({ headers: { "x-forwarded-for": ip } });
+const fakeRequestFromIp = (ip) => ({ headers: {}, socket: { remoteAddress: ip } });
 
 function cookieValue(setCookieString, name) {
   return parseCookies(setCookieString)[name];
@@ -94,4 +95,41 @@ test("lead submission rate limiting blocks an IP after 8 submissions in an hour,
   for (let i = 0; i < 8; i++) recordLeadSubmission(request);
   assert.equal(isLeadRateLimited(request), true);
   assert.equal(isLoginRateLimited(request), false);
+});
+
+test("getClientIp ignores X-Forwarded-For by default, closing the rate-limit bypass (regression for the audit finding)", () => {
+  const spoofed = { headers: { "x-forwarded-for": "1.2.3.4" }, socket: { remoteAddress: "203.0.113.99" } };
+  assert.equal(getClientIp(spoofed), "203.0.113.99");
+});
+
+test("login rate limiting can't be bypassed by sending a different X-Forwarded-For per request", () => {
+  const attacker = (ip) => ({ headers: { "x-forwarded-for": ip }, socket: { remoteAddress: "203.0.113.50" } });
+  for (let i = 0; i < 5; i++) recordFailedLogin(attacker(`1.2.3.${i}`));
+  assert.equal(isLoginRateLimited(attacker("9.9.9.9")), true);
+});
+
+test("getClientIp honors X-Forwarded-For only when explicitly trusting a proxy, and takes the hop closest to it", () => {
+  const request = { headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" }, socket: { remoteAddress: "10.0.0.1" } };
+  assert.equal(getClientIp(request, { trustProxy: true }), "10.0.0.1");
+  assert.equal(getClientIp(request, { trustProxy: false }), "10.0.0.1");
+});
+
+test("hashPassword + verifyPasswordHash round-trip, and reject a wrong password", () => {
+  const stored = hashPassword("correct-horse");
+  assert.match(stored, /^scrypt:[0-9a-f]+:[0-9a-f]+$/);
+  assert.equal(verifyPasswordHash("correct-horse", stored), true);
+  assert.equal(verifyPasswordHash("wrong", stored), false);
+});
+
+test("verifyPasswordHash still accepts a legacy plaintext ADMIN_PASSWORD (pre-hash instances)", () => {
+  assert.equal(verifyPasswordHash("senha-antiga", "senha-antiga"), true);
+  assert.equal(verifyPasswordHash("errada", "senha-antiga"), false);
+});
+
+test("a session created under one password is rejected once the stored password changes", () => {
+  const setCookie = createSessionCookie("eduardo", SECRET, fakeRequest(""), "senha-antiga");
+  const token = cookieValue(setCookie, "md_session");
+  const request = fakeRequest(`md_session=${encodeURIComponent(token)}`);
+  assert.equal(readSession(request, SECRET, "senha-antiga")?.u, "eduardo");
+  assert.equal(readSession(request, SECRET, "senha-nova"), null);
 });

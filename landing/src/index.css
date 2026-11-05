@@ -37,12 +37,10 @@ h3 { font-family: Newsreader, serif; font-size: 25px; line-height: 1.1; }
 .cta-dark { border-color: #1D1D1B; background: #1D1D1B; }
 .microcopy { margin-top: 13px; color: #767169; font-size: 11px; }
 .microcopy b { margin: 0 6px; color: #C96442; }
-.vsl { position: relative; display: flex; width: 100%; aspect-ratio: 16 / 10; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 4px solid #F4EFE7; border-radius: 18px; outline: 1px solid #C96442; background: #1D1D1B; color: #fff; box-shadow: 0 24px 70px rgba(29,29,27,.2); cursor: pointer; }
-.vsl::after { position: absolute; inset: 0; content: ""; background: radial-gradient(circle at 70% 25%, rgba(201,100,66,.2), transparent 38%), linear-gradient(135deg, transparent, rgba(255,255,255,.025)); }
-.vsl-ui { position: absolute; inset: 20px; display: grid; align-content: start; gap: 8px; opacity: .28; text-align: left; }
-.vsl-ui span { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
-.vsl-ui b { width: max-content; padding: 6px 12px; border: 1px solid #DA8060; border-radius: 20px; font-size: 12px; }
-.vsl-line { width: 1px; height: 55px; margin-left: 25px; background: #DA8060; }
+.vsl { position: relative; display: flex; width: 100%; aspect-ratio: 16 / 10; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 4px solid #F4EFE7; border-radius: 18px; outline: 1px solid #C96442; background: #1D1D1B; color: #fff; box-shadow: 0 24px 70px rgba(29,29,27,.2); }
+.vsl::after { position: absolute; inset: 0; content: ""; background: radial-gradient(circle at 70% 25%, rgba(201,100,66,.2), transparent 38%), linear-gradient(135deg, transparent, rgba(255,255,255,.025)); pointer-events: none; }
+.vsl-placeholder { position: relative; z-index: 2; display: flex; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.vsl-real { width: 100%; }
 .play { position: relative; z-index: 2; display: grid; width: 72px; height: 72px; margin-bottom: 18px; place-items: center; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; background: #C96442; box-shadow: 0 0 0 10px rgba(201,100,66,.13); transition: transform .2s; }
 .vsl:hover .play { transform: scale(1.06); }
 .vsl strong, .vsl small { position: relative; z-index: 2; }
@@ -164,7 +162,7 @@ h3 { font-family: Newsreader, serif; font-size: 25px; line-height: 1.1; }
 .proof-grid article div { display: grid; height: 190px; place-items: center; border-radius: 8px; background: rgba(250,248,244,.55); color: #9D9288; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
 .proof-grid p { padding: 14px 5px 4px; font-family: Newsreader, serif; font-size: 17px; }
 .offer-wrap { padding: 100px 0; background: #030303; }
-.offer-card { position: relative; display: grid; overflow: hidden; gap: clamp(40px,7vw,90px); padding: clamp(32px,6vw,72px); border: 2px solid #FF5A1F; border-radius: 24px; background: radial-gradient(circle at 100% 0,rgba(255,90,31,.2),transparent 38%),linear-gradient(145deg,#080808,#030303); color: #fff; box-shadow: 0 0 0 1px rgba(255,134,77,.16),0 0 42px rgba(255,90,31,.18),0 35px 90px rgba(0,0,0,.7); }
+.offer-card { position: relative; display: grid; overflow: hidden; gap: clamp(40px,7vw,90px); padding: clamp(32px,6vw,72px); border: 1px solid rgba(255,90,31,.22); border-radius: 24px; background: radial-gradient(circle at 100% 0,rgba(255,90,31,.14),transparent 38%),linear-gradient(145deg,#0a0a0a,#030303); color: #fff; box-shadow: 0 35px 90px rgba(0,0,0,.7); }
 .offer-card::before { position: absolute; top: -120px; right: 12%; width: 280px; height: 280px; border-radius: 50%; content: ""; background: rgba(255,90,31,.13); filter: blur(70px); pointer-events: none; }
 .offer-card h2 { max-width: 650px; margin: 18px 0 18px; color: #FFFDF9; font-family: Sora,sans-serif; font-size: clamp(38px,5vw,64px); line-height: .98; }
 .offer-description { max-width: 600px; margin: 0 0 34px; color: #D0CCC5; font-size: 16px; line-height: 1.75; }
@@ -172,13 +170,15 @@ h3 { font-family: Newsreader, serif; font-size: 25px; line-height: 1.1; }
 .offer-card ul { display: grid; gap: 14px; }
 .offer-card li { display: flex; align-items: center; gap: 12px; color: #F0EDE7; font-size: 15px; font-weight: 600; }
 .offer-card li svg { width: 18px; color: #FF7138; filter: drop-shadow(0 0 6px rgba(255,90,31,.7)); }
-.price-box { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: clamp(28px,4vw,44px); border: 1px solid rgba(255,113,56,.75); border-radius: 20px; background: rgba(3,3,3,.88); color: #FFFDF9; text-align: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.06),0 0 30px rgba(255,90,31,.16); }
-.price-box > span { color: #FFFDF9; font-family: Sora,sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -.03em; }
-.price-caption { margin: 8px 0 28px !important; color: #BBB7B0 !important; font-size: 12px !important; }
+.price-box { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: clamp(32px,4vw,48px) clamp(28px,4vw,44px); border: 1px solid rgba(255,113,56,.55); border-radius: 20px; background: linear-gradient(165deg,#0d0d0d,#030303); color: #FFFDF9; text-align: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.06),0 0 40px rgba(255,90,31,.14),0 20px 50px rgba(0,0,0,.5); }
+.price-box > span { color: #FFB88A; font-family: Sora,sans-serif; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.price-caption { margin: 10px 0 26px !important; color: #BBB7B0 !important; font-size: 12px !important; }
 .price-box > strong { display: flex; width: 100%; align-items: flex-start; justify-content: center; gap: 7px; margin: 0; padding-right: 20px; font-family: Sora,sans-serif; font-weight: 800; letter-spacing: -.07em; }
 .price-box > strong small { margin-top: 12px; color: #FF7A3D; font-size: 20px; letter-spacing: -.03em; }
 .price-box > strong b { color: #FFFDF9; font-size: clamp(76px,9vw,108px); line-height: .82; text-shadow: 0 0 28px rgba(255,90,31,.28); }
-.price-note { margin: 12px 0 28px !important; color: #D3CFC8 !important; font-size: 13px !important; }
+.price-note { margin: 18px 0 28px !important; color: #D3CFC8 !important; font-size: 13px !important; }
+.price-countdown { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 18px 0 28px !important; padding: 9px 16px; border: 1px solid rgba(255,90,31,.4); border-radius: 999px; background: rgba(255,90,31,.1); color: #E8C4A8 !important; font-size: 12px !important; }
+.price-countdown b { color: #FF8A45; font-family: Sora,sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .price-box .cta { width: 100%; min-height: 58px; border-color: #FF7138 !important; background: linear-gradient(135deg,#FF7138,#F04400) !important; color: #080808 !important; font-family: Sora,sans-serif; font-weight: 800; box-shadow: 0 0 24px rgba(255,90,31,.3) !important; }
 .price-box .cta:hover { background: linear-gradient(135deg,#FF8A52,#FF5A1F) !important; box-shadow: 0 0 34px rgba(255,90,31,.42) !important; }
 .price-box small.secure-note { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 16px; color: #AAA69F; font-size: 10px; }
@@ -297,8 +297,6 @@ body { background: #070707; color: #F4F4F0; }
 .microcopy b { color: #FF5A1F; }
 .vsl { border-color: #151515; outline-color: #FF5A1F; background: #030303; box-shadow: 0 0 0 1px rgba(255,90,31,.3),0 0 60px rgba(255,69,0,.18),0 28px 80px rgba(0,0,0,.72); }
 .vsl::after { background: radial-gradient(circle at 70% 25%,rgba(255,90,31,.24),transparent 38%),linear-gradient(135deg,transparent,rgba(255,255,255,.025)); }
-.vsl-ui b { border-color: #FF5A1F; color: #FF8A45; }
-.vsl-line { background: #FF5A1F; box-shadow: 0 0 10px #FF5A1F; }
 .play { border-color: rgba(255,255,255,.4); background: #FF5A1F; color: #090909; box-shadow: 0 0 0 10px rgba(255,90,31,.12),0 0 34px rgba(255,90,31,.42); }
 .hand-note { color: #FF8A45; font-family: Manrope,sans-serif; font-size: 13px; font-weight: 700; }
 .bg-paper { background-color: #0B0B0B !important; }

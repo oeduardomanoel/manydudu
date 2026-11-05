@@ -103,6 +103,7 @@ export class JsonStore {
     const contact = await this.getContact(id);
     return Boolean(contact?.automationPaused);
   }
+  async deleteContact(id) { await this.update((state) => { state.contacts ??= {}; delete state.contacts[id]; }); }
   async addCampaign(campaign) {
     await this.update((state) => {
       state.campaigns ??= [];
@@ -127,6 +128,7 @@ export class JsonStore {
   async listCampaigns() { const state = await this.read(); return state.campaigns ?? []; }
   async addLead(lead) { await this.update((state) => { state.leads ??= []; state.leads.unshift(lead); }); return lead; }
   async listLeads() { const state = await this.read(); return state.leads ?? []; }
+  async deleteLead(id) { await this.update((state) => { state.leads = (state.leads ?? []).filter((lead) => lead.id !== id); }); }
   async updateLead(id, changes) {
     let updated = null;
     await this.update((state) => {

@@ -7,6 +7,12 @@ import { MetaClient } from "./meta/client.js";
 import { createStore } from "./storage/create-store.js";
 import { scheduleTokenRefresh, tokenFingerprint } from "./meta/token-refresh.js";
 
+// Without these, one unhandled rejection anywhere in the process (a bad webhook
+// payload, a flaky Meta API call outside a try/catch) kills the whole instance —
+// Node's default behavior for an uncaught unhandledRejection is to exit.
+process.on("unhandledRejection", (reason) => { console.error("[unhandledRejection]", reason); });
+process.on("uncaughtException", (error) => { console.error("[uncaughtException]", error); process.exit(1); });
+
 const env = process.env;
 const port = Number(env.PORT || 3000);
 const store = createStore({ env });
@@ -31,9 +37,17 @@ if (sessionSecret.length < MIN_SECRET_LENGTH) {
 
 const setupToken = env.ADMIN_PASSWORD ? "" : randomBytes(24).toString("hex");
 
+// A silent "eduardo" default meant an instance with ADMIN_PASSWORD set but ADMIN_USER
+// forgotten (e.g. a hand-edited .env) would boot with a predictable, publicly-known
+// admin username. Refuse to start rather than guess.
+if (env.ADMIN_PASSWORD && !env.ADMIN_USER) {
+  console.error("ERRO: ADMIN_PASSWORD está definida mas ADMIN_USER não. Defina os dois no .env antes de subir o servidor.");
+  process.exit(1);
+}
+
 const config = { verifyToken: env.META_VERIFY_TOKEN || "", appSecret: env.META_APP_SECRET || "",
   configured: Boolean(env.META_ACCESS_TOKEN && env.INSTAGRAM_ACCOUNT_ID && env.META_VERIFY_TOKEN && env.META_APP_SECRET),
-  adminUser: env.ADMIN_USER || "eduardo", adminPassword: env.ADMIN_PASSWORD || "", sessionSecret, setupToken,
+  adminUser: env.ADMIN_USER || "", adminPassword: env.ADMIN_PASSWORD || "", sessionSecret, setupToken,
   envPath: env.MANYDUDU_ENV_PATH || join(process.cwd(), ".env") };
 if (!env.ADMIN_PASSWORD) {
   console.warn("AVISO: ADMIN_PASSWORD não definida — o login admin ficará bloqueado até configurar.");

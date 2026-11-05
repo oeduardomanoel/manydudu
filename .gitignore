@@ -5,3 +5,4 @@ node_modules/
 .runtime/
 .agents/
 skills-lock.json
+.codegraph/

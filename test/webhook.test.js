@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { verifyMetaSignature, extractComments, extractMessages, extractPostbacks } from "../src/meta/webhook.js";
+import { verifyMetaSignature, extractComments, extractMessages, extractPostbacks, parseSignedRequest } from "../src/meta/webhook.js";
 
 test("accepts a valid sha256 signature", () => {
   const body = Buffer.from('{"object":"instagram"}');
@@ -11,6 +11,35 @@ test("accepts a valid sha256 signature", () => {
 
 test("rejects a malformed signature", () => {
   assert.equal(verifyMetaSignature(Buffer.from("{}"), "nope", "secret"), false);
+});
+
+function signRequest(payload, secret) {
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", secret).update(encodedPayload).digest("base64url");
+  return `${signature}.${encodedPayload}`;
+}
+
+test("parseSignedRequest returns the payload for a correctly signed request", () => {
+  const payload = { algorithm: "HMAC-SHA256", user_id: "12345" };
+  const result = parseSignedRequest(signRequest(payload, "app-secret"), "app-secret");
+  assert.deepEqual(result, payload);
+});
+
+test("parseSignedRequest rejects a request signed with a different secret", () => {
+  const signed = signRequest({ algorithm: "HMAC-SHA256", user_id: "12345" }, "wrong-secret");
+  assert.equal(parseSignedRequest(signed, "app-secret"), null);
+});
+
+test("parseSignedRequest rejects a payload claiming a different algorithm", () => {
+  const signed = signRequest({ algorithm: "none", user_id: "12345" }, "app-secret");
+  assert.equal(parseSignedRequest(signed, "app-secret"), null);
+});
+
+test("parseSignedRequest rejects malformed input instead of throwing", () => {
+  assert.equal(parseSignedRequest("not-a-signed-request", "app-secret"), null);
+  assert.equal(parseSignedRequest("", "app-secret"), null);
+  assert.equal(parseSignedRequest(undefined, "app-secret"), null);
+  assert.equal(parseSignedRequest("sig.payload", ""), null);
 });
 
 test("extracts comment changes from Instagram webhook payload", () => {

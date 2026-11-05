@@ -77,3 +77,33 @@ test("applyBackup replaces the state but preserves the live metaToken, ignoring 
   assert.deepEqual(state.rules, [{ id: "new", keyword: "novo" }]);
   assert.deepEqual(state.metaToken, fullState.metaToken);
 });
+
+test("exportState carries settings (regression: restore used to wipe branding/webhook/CAPI silently)", () => {
+  const stateWithSettings = { ...fullState, settings: { brandName: "Estúdio Ana", outboundWebhookUrl: "https://n8n.example.com/hook" } };
+  const backup = exportState(stateWithSettings);
+  assert.deepEqual(backup.state.settings, { brandName: "Estúdio Ana", outboundWebhookUrl: "https://n8n.example.com/hook" });
+});
+
+test("validateBackup runs settings through the same allowlist as PATCH /api/settings, dropping unknown keys", () => {
+  const sanitized = validateBackup(JSON.stringify({
+    format: "manydudu-backup",
+    state: { settings: { brandName: "  Estúdio Ana  ", notARealSetting: "x" } },
+  }));
+  assert.equal(sanitized.settings.brandName, "Estúdio Ana");
+  assert.equal("notARealSetting" in sanitized.settings, false);
+});
+
+test("validateBackup rejects a restored settings field that fails its own validation (e.g. non-https webhook)", () => {
+  assert.throws(() => validateBackup(JSON.stringify({
+    format: "manydudu-backup",
+    state: { settings: { outboundWebhookUrl: "http://not-https.example.com" } },
+  })), AppError);
+});
+
+test("applyBackup preserves settings not present in the restored file instead of wiping them", () => {
+  const state = { ...structuredClone(fullState), settings: { brandName: "Nome Atual", outboundWebhookUrl: "https://ainda-configurado.example.com" } };
+  const sanitized = { rules: [], events: {}, activity: [], pendingDeliveries: {}, contacts: {}, campaigns: [], leads: [], settings: { brandName: "Nome do Backup" } };
+  applyBackup(state, sanitized);
+  assert.equal(state.settings.brandName, "Nome do Backup");
+  assert.equal(state.settings.outboundWebhookUrl, "https://ainda-configurado.example.com");
+});

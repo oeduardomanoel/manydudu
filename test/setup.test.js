@@ -6,6 +6,7 @@ import { readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../src/app.js";
+import { verifyPasswordHash } from "../src/auth.js";
 
 function startTestServer(config) {
   const server = createServer(createApp({ store: { getSettings: async () => ({}) }, meta: {}, config, serveStatic: (_req, res) => { res.writeHead(404); res.end(); } }));
@@ -86,7 +87,12 @@ test("POST /api/setup/complete writes the env file and returns a fresh verify to
     assert.equal(typeof result.metaVerifyToken, "string");
     const written = await readFile(config.envPath, "utf8");
     assert.match(written, /^ADMIN_USER=eduardo$/m);
-    assert.match(written, /^ADMIN_PASSWORD=senha-forte-123$/m);
+    // the wizard must never write the plaintext password to disk — only a scrypt hash
+    assert.doesNotMatch(written, /^ADMIN_PASSWORD=senha-forte-123$/m);
+    const [, storedHash] = /^ADMIN_PASSWORD=(scrypt:[0-9a-f]+:[0-9a-f]+)$/m.exec(written) ?? [];
+    assert.ok(storedHash, `expected a scrypt hash in .env, got: ${written}`);
+    assert.equal(verifyPasswordHash("senha-forte-123", storedHash), true);
+    assert.equal(verifyPasswordHash("senha-errada", storedHash), false);
     assert.match(written, /^SESSION_SECRET=[0-9a-f]{64}$/m);
     assert.match(written, /^META_ACCESS_TOKEN=IGAALtest$/m);
     assert.match(written, /^META_APP_ID=999888777$/m);

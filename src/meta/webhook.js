@@ -7,6 +7,27 @@ export function verifyMetaSignature(body, header, secret) {
   return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
+// Meta's "signed_request" format (used for the Data Deletion Request callback):
+// "<base64url signature>.<base64url JSON payload>", where the signature is an
+// HMAC-SHA256 of the payload segment keyed by the app secret. Returns the parsed
+// payload only once the signature verifies — never trust the payload otherwise.
+export function parseSignedRequest(signedRequest, secret) {
+  if (!secret) return null;
+  const [encodedSignature, encodedPayload] = String(signedRequest ?? "").split(".");
+  if (!encodedSignature || !encodedPayload) return null;
+  let received;
+  try { received = Buffer.from(encodedSignature, "base64url"); } catch { return null; }
+  const expected = createHmac("sha256", secret).update(encodedPayload).digest();
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    if (payload.algorithm !== "HMAC-SHA256") return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 export function extractComments(payload) {
   const comments = [];
   for (const entry of payload.entry ?? []) {

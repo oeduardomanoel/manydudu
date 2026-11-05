@@ -28,16 +28,20 @@ function describeMetaError(error, fallback) {
 // debug_token exige um token de app (formato appId|appSecret) como access_token — o próprio
 // token de usuário sendo inspecionado não tem autoridade pra se auto-inspecionar e a Meta
 // responde "Application does not have permission for this action" se você tentar.
+const REQUEST_TIMEOUT_MS = 12_000;
+
 export async function debugToken(token, appId, appSecret, fetcher = fetch) {
   const appToken = `${appId}|${appSecret}`;
-  const response = await fetcher(`https://graph.instagram.com/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(appToken)}`);
+  const response = await fetcher(`https://graph.instagram.com/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(appToken)}`,
+    { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   const result = await response.json();
   if (!response.ok) throw new Error(describeMetaError(result.error, `Meta respondeu ${response.status} ao checar o token.`));
   return result.data;
 }
 
 export async function refreshLongLivedToken(token, fetcher = fetch) {
-  const response = await fetcher(`https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`);
+  const response = await fetcher(`https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`,
+    { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   const result = await response.json();
   if (!response.ok || !result.access_token) throw new Error(result.error?.message || `Meta respondeu ${response.status} ao renovar o token.`);
   return { accessToken: result.access_token, expiresAt: Date.now() + result.expires_in * 1000 };
