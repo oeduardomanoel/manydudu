@@ -6,7 +6,7 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createPost, MAX_VIDEO_BYTES, UPLOAD_ID, VIDEO_TYPES } from "./domain/publishing.js";
 import { createRule, findMatchingRule, selectPublicReply, suggestKeywords, updateRule } from "./domain/automation.js";
-import { buildAnalytics } from "./domain/analytics.js";
+import { buildAnalytics, buildKpis } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, parseSignedRequest, verifyMetaSignature } from "./meta/webhook.js";
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
 import { exportPackage, parsePackage } from "./domain/automation-package.js";
@@ -353,7 +353,7 @@ export function createApp({ store, meta, config, serveStatic, scheduler = null }
       }
       if (request.method === "GET" && url.pathname === "/api/analytics") {
         const state = await store.read();
-        return json(response, 200, buildAnalytics(state));
+        return json(response, 200, { ...buildAnalytics(state), kpis: buildKpis({ activity: state.activity ?? [], leads: state.leads ?? [] }) });
       }
       if (request.method === "GET" && url.pathname === "/api/moderation/comments") {
         const media = await meta.listMedia(12);

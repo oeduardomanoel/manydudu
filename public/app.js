@@ -71,12 +71,7 @@ async function renderDashboard() {
   state.rules = dashboard.rules;
   checkOnboarding(dashboard.rules);
   const active = dashboard.rules.filter((rule) => rule.enabled).length;
-  const sent = dashboard.activity.filter((event) => event.status === "sent").length;
-  const handled = dashboard.activity.filter((event) => event.status !== "ignored").length;
-  $("#active-count").textContent = active;
-  $("#sent-count").textContent = sent;
-  $("#response-rate").textContent = handled ? `${Math.round(sent / handled * 100)}%` : "—";
-  $("#rule-total").textContent = `${dashboard.rules.length} ${dashboard.rules.length === 1 ? "regra" : "regras"}`;
+  $("#rule-total").textContent = `${active} de ${dashboard.rules.length} ${dashboard.rules.length === 1 ? "regra ativa" : "regras ativas"}`;
   $("#connection").textContent = dashboard.configured ? "Conectado ✓" : "configuração pendente";
   renderRules(dashboard.rules);
   renderActivity(dashboard.activity);
@@ -129,7 +124,74 @@ async function loadAnalytics() {
   ];
   $("#funnel").innerHTML = stages.map(([label, value], index) => `<article><small>0${index + 1}</small><strong>${value}</strong><span>${label}</span>${index < stages.length - 1 ? '<i>→</i>' : ""}</article>`).join("");
   $("#analytics-period").textContent = `${analytics.total.deliveryRate}% de entrega`;
+  renderKpis(analytics.kpis);
   $("#rule-metrics").innerHTML = analytics.rules.length ? analytics.rules.map((rule) => `<article><div><strong>${escapeHtml(rule.name)}</strong><small>${rule.enabled ? "ativa" : "pausada"}</small></div><span>${rule.captured} capturas</span><span>${rule.replied} respostas</span><b>${rule.deliveryRate}%</b></article>`).join("") : '<p class="empty">Crie uma automação para começar a medir o funil.</p>';
+}
+
+function sparkline(series, hot) {
+  const max = Math.max(1, ...series);
+  const step = series.length > 1 ? 200 / (series.length - 1) : 200;
+  const points = series.map((value, index) => `${(index * step).toFixed(1)},${(38 - value / max * 32).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 200 42" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,42 ${points} 200,42" class="spark-fill${hot ? " hot" : ""}"/><polyline points="${points}" class="spark-line${hot ? " hot" : ""}"/></svg>`;
+}
+
+function kpiDelta(value, previous, unit) {
+  if (previous === null || previous === undefined || value === null) return '<span class="kpi-delta muted">sem período anterior pra comparar</span>';
+  const diff = unit === "pp" ? value - previous : previous ? Math.round((value - previous) / previous * 100) : null;
+  if (diff === null) return value ? '<span class="kpi-delta up">▲ novo nesta semana</span>' : '<span class="kpi-delta muted">igual à semana anterior</span>';
+  if (diff === 0) return '<span class="kpi-delta muted">igual à semana anterior</span>';
+  return `<span class="kpi-delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "▲" : "▼"} ${Math.abs(diff)}${unit === "pp" ? " p.p." : "%"} vs semana anterior</span>`;
+}
+
+function renderKpis(kpis) {
+  if (!kpis) return;
+  const cards = [
+    ["DMs enviadas", kpis.dmSent, "", true],
+    ["Taxa de resposta", kpis.responseRate, "pp"],
+    ["Links entregues", kpis.delivered, ""],
+    ["Leads capturados", kpis.leads, ""],
+  ];
+  $("#kpi-grid").innerHTML = cards.map(([label, metric, unit, hot]) => `<article class="kpi${hot ? " hot" : ""}">
+    <span>${label}</span><strong>${metric.value === null ? "—" : `${metric.value.toLocaleString("pt-BR")}${unit === "pp" ? "%" : ""}`}</strong>
+    ${kpiDelta(metric.value, metric.previous, unit)}${sparkline(metric.series, hot)}</article>`).join("");
+  $("#kpis-coverage").textContent = kpis.complete ? "" : `O log de atividade só guarda os eventos mais recentes — DMs e respostas contam desde ${new Date(kpis.since).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}.`;
+}
+
+function relativeTime(iso) {
+  if (!iso) return "nunca";
+  const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `há ${minutes} min`;
+  if (minutes < 48 * 60) return `há ${Math.round(minutes / 60)} h`;
+  return `há ${Math.round(minutes / 1440)} dias`;
+}
+
+// Linha de saúde no topo da visão geral: o token morto de setembro passou semanas sem ninguém ver
+// porque esse estado só existia na tela de Saúde.
+function renderStatusStrip() {
+  const report = state.health;
+  const pills = [];
+  if (report) {
+    const { token, webhook } = report;
+    const tokenText = !token.configured ? "não configurado" : token.expired ? "expirado — gere um novo" : token.valid === false ? "inválido" : token.daysLeft != null ? `válido · ${token.daysLeft} dias` : "válido";
+    pills.push([token.status, "Token", tokenText, "health"]);
+    const silentHours = webhook.lastEventAt ? (Date.now() - Date.parse(webhook.lastEventAt)) / 3_600_000 : Infinity;
+    pills.push([!webhook.configured ? "critical" : silentHours > 48 ? "warn" : "ok", "Webhook", webhook.configured ? `último evento ${relativeTime(webhook.lastEventAt)}` : "faltando credenciais", "health"]);
+    if (report.store.status !== "ok") pills.push([report.store.status, "Banco", report.store.error || "lento", "health"]);
+  }
+  if (state.posts) {
+    const today = new Date().toDateString();
+    const scheduledToday = state.posts.filter((post) => post.status === "scheduled" && new Date(post.scheduledAt).toDateString() === today).length;
+    const failed = state.posts.filter((post) => post.status === "failed").length;
+    if (failed) pills.push(["critical", `${failed} Reel${failed > 1 ? "s" : ""}`, "falhou ao publicar", "publish"]);
+    pills.push([scheduledToday ? "warn" : "ok", "Reels hoje", scheduledToday ? `${scheduledToday} agendado${scheduledToday > 1 ? "s" : ""}` : "nada agendado", "publish"]);
+  }
+  if (state.postsQuota?.total) pills.push(["ok", "Cota da Meta", `${state.postsQuota.used} / ${state.postsQuota.total} em 24 h`, "publish"]);
+  $("#status-strip").innerHTML = pills.map(([status, label, text, view]) => `<button type="button" class="status-pill ${status}" data-go-view="${view}"><i></i>${escapeHtml(label)} <b>${escapeHtml(text)}</b></button>`).join("");
+  const healthStatus = report ? [report.token.status, report.webhook.status, report.store.status] : [];
+  const dot = $("#nav-health-dot");
+  dot.hidden = !report;
+  dot.className = `nav-dot ${healthStatus.includes("critical") ? "critical" : healthStatus.includes("warn") ? "warn" : "ok"}`;
 }
 
 async function loadContentRoi() {
@@ -340,6 +402,11 @@ async function loadLeads() {
   state.leads = result.leads;
   renderLeads();
   renderCampaigns();
+  // leads que ainda ninguém abordou — a próxima ação de quem vende
+  const untouched = state.leads.filter((lead) => !lead.stage || lead.stage === "novo").length;
+  $("#nav-badge-leads").hidden = !untouched;
+  $("#nav-badge-leads").textContent = untouched;
+  $("#nav-badge-leads").title = `${untouched} lead${untouched === 1 ? "" : "s"} ainda no estágio Novo`;
 }
 
 function renderLeadsFilter() {
@@ -458,6 +525,8 @@ function setHealthField(prefix, label, statusKey) {
 async function loadHealth() {
   try {
     const report = await request("/api/health");
+    state.health = report;
+    renderStatusStrip();
     const { token } = report;
     const tokenLabel = !token.configured ? "Não configurado"
       : token.expired ? "Expirado — gere um novo"
@@ -1091,8 +1160,13 @@ function setPublishProgress(fraction, label) {
 async function loadPosts() {
   const { posts, quota } = await request("/api/posts");
   state.posts = posts;
+  state.postsQuota = quota;
   $("#publish-quota").textContent = quota?.total ? `${quota.used} de ${quota.total} publicações nas últimas 24 h` : "";
   renderPosts();
+  renderStatusStrip();
+  const pending = posts.filter((post) => post.status === "scheduled" || post.status === "publishing" || post.status === "failed").length;
+  $("#nav-badge-posts").hidden = !pending;
+  $("#nav-badge-posts").textContent = pending;
   clearTimeout(postsPollTimer);
   // enquanto algo estiver publicando (ou vencendo), atualiza a fila sozinho
   const soon = Date.now() + 60_000;
@@ -1123,6 +1197,10 @@ function renderPosts() {
   }).join("") : '<p class="empty">Nenhum Reel na fila ainda.</p>';
 }
 
+$("#status-strip").addEventListener("click", (event) => {
+  const view = event.target.closest("[data-go-view]")?.dataset.goView;
+  if (view) document.querySelector(`nav button[data-view="${view}"]`)?.click();
+});
 $("#publish-file").addEventListener("change", (event) => setPublishFile(event.target.files[0]));
 $("#video-drop").addEventListener("dragover", (event) => { event.preventDefault(); event.currentTarget.classList.add("dragging"); });
 $("#video-drop").addEventListener("dragleave", (event) => event.currentTarget.classList.remove("dragging"));

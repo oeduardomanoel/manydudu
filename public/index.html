@@ -9,7 +9,14 @@
   <div class="grain"></div>
   <aside>
     <a class="brand" href="/" id="brand-link"><span id="brand-mark" class="brand-mark">MD</span> <span id="brand-name">manydudu</span></a>
-    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="inbox" data-scroll="top">✉ <span>DM</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button><button data-view="health" data-scroll="health">♡ <span>Saúde</span></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button><button data-view="carousel" data-scroll="carousel-section">▤ <span>Carrossel</span></button><button data-view="publish" data-scroll="publish">▶ <span>Publicar</span></button></nav>
+    <nav>
+      <p class="nav-label">Instagram</p>
+      <button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="inbox" data-scroll="top">✉ <span>DM</span></button><button data-view="publish" data-scroll="publish">▶ <span>Publicar</span><b class="nav-badge" id="nav-badge-posts" hidden></b></button><button data-view="carousel" data-scroll="carousel-section">▤ <span>Carrossel</span></button>
+      <p class="nav-label">Captura</p>
+      <button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span><b class="nav-badge" id="nav-badge-leads" hidden></b></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button>
+      <p class="nav-label">Sistema</p>
+      <button data-view="health" data-scroll="health">♡ <span>Saúde</span><i class="nav-dot" id="nav-health-dot" hidden></i></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button>
+    </nav>
     <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
   </aside>
   <main id="top">
@@ -20,8 +27,11 @@
       <p>1. Escolha um Reel na biblioteca abaixo (ou deixe em branco pra valer pra todos). 2. Clique em "Nova automação" e defina a palavra-chave que a pessoa vai comentar. 3. Escreva a resposta e salve — pronto, já está no ar.</p></div>
       <button type="button" class="primary compact" id="onboarding-dismiss">Entendi →</button>
     </section>
-    <section class="stats"><article><span>Automações ativas</span><strong id="active-count">0</strong><i>↗</i></article><article><span>Respostas enviadas</span><strong id="sent-count">0</strong><i>↗</i></article><article><span>Taxa de resposta</span><strong id="response-rate">—</strong><i>↗</i></article></section>
-    <section class="media-section" id="contents">
+    <div class="status-strip" id="status-strip" aria-live="polite"></div>
+    <section class="kpis">
+      <div class="kpis-head"><p class="eyebrow">ÚLTIMOS 7 DIAS</p><span id="kpis-coverage"></span></div>
+      <div class="kpi-grid" id="kpi-grid"><p class="empty">Calculando…</p></div>
+    </section>    <section class="media-section" id="contents">
       <div class="section-head"><div><p class="eyebrow">BIBLIOTECA DO INSTAGRAM</p><h2>Escolha onde a conversa começa.</h2></div><div class="filters"><button class="filter active" data-filter="REELS">Reels</button><button class="filter" data-filter="ALL">Todos</button><button class="icon-btn refresh" id="refresh-media" title="Atualizar conteúdos">↻</button></div></div>
       <div id="media-grid" class="media-grid"><div class="media-loading">Buscando seus conteúdos no Instagram…</div></div>
     </section>
