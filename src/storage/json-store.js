@@ -128,6 +128,20 @@ export class JsonStore {
   async listCampaigns() { const state = await this.read(); return state.campaigns ?? []; }
   async addLead(lead) { await this.update((state) => { state.leads ??= []; state.leads.unshift(lead); }); return lead; }
   async listLeads() { const state = await this.read(); return state.leads ?? []; }
+  async addPost(post) { await this.update((state) => { state.posts ??= []; state.posts.unshift(post); }); return post; }
+  async listPosts() { const state = await this.read(); return state.posts ?? []; }
+  async getPost(id) { return (await this.listPosts()).find((post) => post.id === id) ?? null; }
+  async updatePost(id, changes) {
+    let updated = null;
+    await this.update((state) => {
+      const post = (state.posts ?? []).find((item) => item.id === id);
+      if (!post) return;
+      Object.assign(post, changes, { updatedAt: new Date().toISOString() });
+      updated = { ...post };
+    });
+    return updated;
+  }
+  async deletePost(id) { await this.update((state) => { state.posts = (state.posts ?? []).filter((post) => post.id !== id); }); }
   async deleteLead(id) { await this.update((state) => { state.leads = (state.leads ?? []).filter((lead) => lead.id !== id); }); }
   async updateLead(id, changes) {
     let updated = null;

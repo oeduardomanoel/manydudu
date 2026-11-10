@@ -67,6 +67,37 @@ export class MetaClient {
     return this.#post(this.messagesPath, { recipient: { id: recipientId }, message });
   }
 
+  // Publicação de Reels (normal ou Trial Reels) em dois passos: container apontando pro vídeo num link
+  // público (a Meta baixa de lá) e media_publish quando ela terminar de processar. O upload direto
+  // (upload_type=resumable) não existe pra token de login do Instagram — a API responde
+  // "The parameter video_url is required".
+  async createReelContainer({ caption, kind, graduationStrategy, shareToFeed, videoUrl }) {
+    if (!this.accessToken) throw new Error("META_ACCESS_TOKEN não configurado.");
+    const payload = { media_type: "REELS", video_url: videoUrl, caption };
+    if (kind === "trial") payload.trial_params = { graduation_strategy: graduationStrategy };
+    else payload.share_to_feed = shareToFeed !== false;
+    return this.#post(`${this.instagramAccountId}/media`, payload);
+  }
+
+  async getContainerStatus(containerId) {
+    return this.#get(`/${encodeURIComponent(containerId)}?fields=status_code,status`);
+  }
+
+  async publishContainer(containerId) {
+    return this.#post(`${this.instagramAccountId}/media_publish`, { creation_id: containerId });
+  }
+
+  async getMediaPermalink(mediaId) {
+    const result = await this.#get(`/${encodeURIComponent(mediaId)}?fields=permalink`);
+    return result.permalink ?? null;
+  }
+
+  async getPublishingLimit() {
+    const result = await this.#get(`/${encodeURIComponent(this.instagramAccountId)}/content_publishing_limit?fields=config,quota_usage`);
+    const entry = result.data?.[0];
+    return entry ? { used: entry.quota_usage ?? 0, total: entry.config?.quota_total ?? null } : null;
+  }
+
   // Chamada barata pra saber se o token ainda vale — usada pela tela de Saúde.
   async checkToken() {
     try {

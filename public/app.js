@@ -1017,5 +1017,171 @@ $("#pipeline-board").addEventListener("drop", async (event) => {
   } catch (error) { alert(error.message); }
 });
 
-await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit(), loadContentRoi(), loadWebhookSettings()]);
+// ── Publicar Reels ──────────────────────────────────────────────────────────
+const POST_STATUS = { scheduled: ["AGENDADO", "scheduled"], publishing: ["PUBLICANDO…", "publishing"], published: ["PUBLICADO", "published"], failed: ["FALHOU", "failed"] };
+let publishFile = null;
+let publishPreviewUrl = null;
+let postsPollTimer = null;
+
+function formatDateTime(iso) {
+  return iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+}
+
+function setPublishFile(file) {
+  const error = $("#publish-error");
+  error.textContent = "";
+  if (!file) return;
+  if (!["video/mp4", "video/quicktime"].includes(file.type)) { error.textContent = "Escolha um vídeo MP4 ou MOV."; return; }
+  if (file.size > 1024 ** 3) { error.textContent = "Vídeo grande demais — o limite do Instagram é 1 GB."; return; }
+  publishFile = file;
+  if (publishPreviewUrl) URL.revokeObjectURL(publishPreviewUrl);
+  publishPreviewUrl = URL.createObjectURL(file);
+  const video = $("#publish-video-preview");
+  video.src = publishPreviewUrl;
+  video.hidden = false;
+  $("#video-drop").classList.add("has-video");
+  $("#publish-file-name").textContent = `${file.name} · ${(file.size / 1024 ** 2).toFixed(1)} MB · trocar vídeo`;
+}
+
+function syncPublishForm() {
+  const form = $("#publish-form");
+  const trial = form.elements.kind.value === "trial";
+  const scheduled = form.elements.when.value === "schedule";
+  $("#publish-trial-options").hidden = !trial;
+  $("#publish-feed-option").hidden = trial;
+  $("#publish-at").hidden = !scheduled;
+  // datetime-local trabalha em hora local, sem fuso — monta o "agora + 2 min" no mesmo formato
+  const soon = new Date(Date.now() + 2 * 60_000 - new Date().getTimezoneOffset() * 60_000);
+  $("#publish-at").min = soon.toISOString().slice(0, 16);
+  $("#publish-submit").textContent = scheduled ? "Agendar →" : "Publicar agora →";
+  const caption = form.elements.caption.value;
+  const hashtags = (caption.match(/#[^\s#]+/g) || []).length;
+  const counter = $("#caption-counter");
+  counter.textContent = `${caption.length} / 2200 · ${hashtags} ${hashtags === 1 ? "hashtag" : "hashtags"}`;
+  counter.classList.toggle("over", hashtags > 30);
+}
+
+// fetch não informa progresso de envio — XMLHttpRequest sim, e um vídeo grande demora
+function uploadVideo(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/posts/upload");
+    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.setRequestHeader("X-CSRF-Token", getCsrfToken());
+    xhr.upload.addEventListener("progress", (event) => { if (event.lengthComputable) onProgress(event.loaded / event.total); });
+    xhr.addEventListener("load", () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch { /* resposta vazia */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data.error || `O envio falhou (${xhr.status}).`));
+    });
+    xhr.addEventListener("error", () => reject(new Error("A conexão caiu durante o envio. Tente de novo.")));
+    xhr.send(file);
+  });
+}
+
+function setPublishProgress(fraction, label) {
+  const progress = $("#publish-progress");
+  progress.hidden = fraction === null;
+  if (fraction === null) return;
+  progress.querySelector("i").style.width = `${Math.round(fraction * 100)}%`;
+  progress.querySelector("span").textContent = label;
+}
+
+async function loadPosts() {
+  const { posts, quota } = await request("/api/posts");
+  state.posts = posts;
+  $("#publish-quota").textContent = quota?.total ? `${quota.used} de ${quota.total} publicações nas últimas 24 h` : "";
+  renderPosts();
+  clearTimeout(postsPollTimer);
+  // enquanto algo estiver publicando (ou vencendo), atualiza a fila sozinho
+  const soon = Date.now() + 60_000;
+  if (posts.some((post) => post.status === "publishing" || (post.status === "scheduled" && Date.parse(post.scheduledAt) <= soon))) {
+    postsPollTimer = setTimeout(() => loadPosts().catch(() => {}), 5000);
+  }
+}
+
+function renderPosts() {
+  const posts = [...(state.posts || [])].sort((a, b) => {
+    const order = { publishing: 0, scheduled: 1, failed: 2, published: 3 };
+    return (order[a.status] - order[b.status]) || (a.status === "scheduled" ? Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt) : Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
+  });
+  $("#posts-list").innerHTML = posts.length ? posts.map((post) => {
+    const [label, tone] = POST_STATUS[post.status] || [post.status, ""];
+    const kind = post.kind === "trial" ? `Trial Reels · ${post.graduationStrategy === "SS_PERFORMANCE" ? "promove sozinho" : "promoção manual"}` : `Reels${post.shareToFeed ? " · feed" : ""}`;
+    const when = post.status === "published" ? `publicado ${formatDateTime(post.publishedAt)}` : post.status === "scheduled" ? (post.scheduled ? `agendado pra ${formatDateTime(post.scheduledAt)}` : "na fila pra publicar agora") : post.status === "failed" ? `falhou ${formatDateTime(post.failedAt)}` : "enviando pra Meta…";
+    return `<article class="post-row">
+      <div><h3>${escapeHtml(truncate(post.caption || "Sem legenda", 90))} <span class="post-status ${tone}">${label}</span></h3>
+      <p>${escapeHtml(kind)} · ${escapeHtml(when)} · ${escapeHtml(post.fileName)}</p>
+      ${post.error ? `<p class="post-error">${escapeHtml(post.error)}</p>` : ""}</div>
+      <div class="rule-actions">
+        ${post.permalink ? `<a class="edit-rule" href="${escapeHtml(post.permalink)}" target="_blank" rel="noopener">Ver no Instagram</a>` : ""}
+        ${post.status === "failed" ? `<button class="edit-rule" data-retry-post="${escapeHtml(post.id)}">Tentar de novo</button>` : ""}
+        ${post.status !== "publishing" ? `<button class="icon-btn" data-delete-post="${escapeHtml(post.id)}" title="${post.status === "published" ? "Tirar da lista (o Reel continua no Instagram)" : "Cancelar"}">×</button>` : ""}
+      </div>
+    </article>`;
+  }).join("") : '<p class="empty">Nenhum Reel na fila ainda.</p>';
+}
+
+$("#publish-file").addEventListener("change", (event) => setPublishFile(event.target.files[0]));
+$("#video-drop").addEventListener("dragover", (event) => { event.preventDefault(); event.currentTarget.classList.add("dragging"); });
+$("#video-drop").addEventListener("dragleave", (event) => event.currentTarget.classList.remove("dragging"));
+$("#video-drop").addEventListener("drop", (event) => { event.preventDefault(); event.currentTarget.classList.remove("dragging"); setPublishFile(event.dataTransfer.files[0]); });
+// o <video> com controles fica dentro do label: clicar nos controles não pode abrir o seletor de arquivo
+$("#publish-video-preview").addEventListener("click", (event) => event.preventDefault());
+$("#publish-file-name").addEventListener("click", () => $("#publish-file").click());
+$("#publish-form").addEventListener("input", syncPublishForm);
+$("#publish-form").addEventListener("change", syncPublishForm);
+$("#publish-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = $("#publish-error");
+  error.textContent = "";
+  if (!publishFile) { error.textContent = "Escolha o vídeo primeiro."; return; }
+  const scheduled = form.elements.when.value === "schedule";
+  if (scheduled && !form.elements.publishAt.value) { error.textContent = "Escolha a data e a hora do agendamento."; return; }
+  const submit = $("#publish-submit");
+  submit.disabled = true;
+  try {
+    const { uploadId } = await uploadVideo(publishFile, (fraction) => setPublishProgress(fraction, `Enviando vídeo… ${Math.round(fraction * 100)}%`));
+    setPublishProgress(1, scheduled ? "Agendando…" : "Vídeo enviado — publicando no Instagram (pode levar alguns minutos)…");
+    await request("/api/posts", { method: "POST", body: JSON.stringify({
+      uploadId, fileName: publishFile.name, kind: form.elements.kind.value, graduationStrategy: form.elements.graduationStrategy.value,
+      shareToFeed: form.elements.shareToFeed.checked, caption: form.elements.caption.value,
+      publishAt: scheduled ? new Date(form.elements.publishAt.value).toISOString() : null,
+    }) });
+    form.reset();
+    publishFile = null;
+    $("#publish-video-preview").hidden = true;
+    $("#publish-video-preview").removeAttribute("src");
+    $("#video-drop").classList.remove("has-video");
+    $("#publish-file-name").textContent = "";
+    syncPublishForm();
+    setPublishProgress(null);
+    await loadPosts();
+    $("#publish-queue").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (submitError) {
+    error.textContent = submitError.message;
+    setPublishProgress(null);
+  } finally {
+    submit.disabled = false;
+  }
+});
+$("#refresh-posts").addEventListener("click", () => loadPosts());
+$("#posts-list").addEventListener("click", async (event) => {
+  const retry = event.target.closest("[data-retry-post]")?.dataset.retryPost;
+  const remove = event.target.closest("[data-delete-post]")?.dataset.deletePost;
+  try {
+    if (retry) await request(`/api/posts/${retry}/retry`, { method: "POST" });
+    else if (remove) {
+      const post = state.posts.find((item) => item.id === remove);
+      if (!confirm(post?.status === "published" ? "Tirar da lista? O Reel continua no Instagram." : "Cancelar esse Reel? O vídeo enviado será apagado do servidor.")) return;
+      await request(`/api/posts/${remove}`, { method: "DELETE" });
+    } else return;
+    await loadPosts();
+  } catch (actionError) { alert(actionError.message); }
+});
+syncPublishForm();
+
+await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit(), loadContentRoi(), loadWebhookSettings(), loadPosts().catch(() => {})]);
 renderPipeline();

@@ -1,4 +1,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, stat, unlink } from "node:fs/promises";
+import { join } from "node:path";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { createPost, MAX_VIDEO_BYTES, UPLOAD_ID, VIDEO_TYPES } from "./domain/publishing.js";
 import { createRule, findMatchingRule, selectPublicReply, suggestKeywords, updateRule } from "./domain/automation.js";
 import { buildAnalytics } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, parseSignedRequest, verifyMetaSignature } from "./meta/webhook.js";
@@ -32,7 +38,7 @@ const withCookie = (response, cookie) => response.appendHeader("Set-Cookie", coo
 const WRITE_METHODS = new Set(["POST", "PATCH", "DELETE"]);
 
 const MAX_RAW_CONTENT_LENGTH = 200_000;
-const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; script-src 'self'; frame-ancestors 'none'";
+const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self' blob:; script-src 'self'; frame-ancestors 'none'";
 function applySecurityHeaders(request, response) {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
@@ -66,7 +72,49 @@ async function readBody(request, limit = 1_000_000) {
   return Buffer.concat(chunks);
 }
 
-export function createApp({ store, meta, config, serveStatic }) {
+// Grava o corpo da requisição direto no disco (vídeo de até 1 GB não cabe no readBody em memória).
+async function saveUpload(request, path, limit) {
+  let size = 0;
+  const counter = new Transform({
+    transform(chunk, _encoding, callback) {
+      size += chunk.length;
+      callback(size > limit ? new AppError("Vídeo grande demais — o limite do Instagram é 1 GB.") : null, chunk);
+    },
+  });
+  try {
+    await pipeline(request, counter, createWriteStream(path));
+  } catch (error) {
+    await unlink(path).catch(() => {});
+    throw error;
+  }
+  return size;
+}
+
+// Endereço público do painel como o navegador do admin vê (atrás do proxy do Coolify): é de onde
+// a Meta vai baixar o vídeo.
+function publicBaseUrl(request) {
+  const proto = String(request.headers["x-forwarded-proto"] ?? "").split(",")[0].trim() || (isSecureRequest(request) ? "https" : "http");
+  const host = String(request.headers["x-forwarded-host"] ?? request.headers.host ?? "").split(",")[0].trim();
+  return `${proto}://${host}`;
+}
+
+// Vídeo com suporte a Range (bytes=início-fim) — quem baixa vídeo costuma pedir em pedaços.
+function sendVideo(request, response, path, size, type) {
+  const range = /^bytes=(\d*)-(\d*)$/.exec(String(request.headers.range ?? ""));
+  let start = 0; let end = size - 1;
+  if (range && (range[1] || range[2])) {
+    start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start > end || start >= size) { response.writeHead(416, { "Content-Range": `bytes */${size}` }); return response.end(); }
+  }
+  const partial = Boolean(range && (range[1] || range[2]));
+  response.writeHead(partial ? 206 : 200, { "Content-Type": type, "Content-Length": end - start + 1, "Accept-Ranges": "bytes", "Cache-Control": "no-store",
+    ...(partial ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}) });
+  if (request.method === "HEAD") return response.end();
+  createReadStream(path, { start, end }).pipe(response);
+}
+
+export function createApp({ store, meta, config, serveStatic, scheduler = null }) {
   return async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     applySecurityHeaders(request, response);
@@ -479,6 +527,61 @@ export function createApp({ store, meta, config, serveStatic }) {
           await store.addCampaign(campaign);
         }
         return json(response, 201, { rule, campaign });
+      }
+      const reelMediaPath = url.pathname.match(/^\/reel-media\/([^/]+)$/);
+      if (reelMediaPath && (request.method === "GET" || request.method === "HEAD")) {
+        // de onde a Meta baixa o vídeo na hora de publicar — só existe enquanto o post está "publicando"
+        const uploadId = reelMediaPath[1];
+        const posts = UPLOAD_ID.test(uploadId) ? await store.listPosts() : [];
+        const info = posts.some((post) => post.uploadId === uploadId && post.status === "publishing")
+          ? await stat(join(config.uploadsDir, uploadId)).catch(() => null) : null;
+        if (!info) { response.writeHead(404); return response.end(); }
+        return sendVideo(request, response, join(config.uploadsDir, uploadId), info.size, uploadId.endsWith(".mov") ? "video/quicktime" : "video/mp4");
+      }
+      if (request.method === "POST" && url.pathname === "/api/posts/upload") {
+        const extension = VIDEO_TYPES[String(request.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase()];
+        if (!extension) return json(response, 400, { error: "Envie um vídeo MP4 ou MOV." });
+        if (Number(request.headers["content-length"] ?? 0) > MAX_VIDEO_BYTES) return json(response, 400, { error: "Vídeo grande demais — o limite do Instagram é 1 GB." });
+        await mkdir(config.uploadsDir, { recursive: true });
+        const uploadId = `${randomUUID()}.${extension}`;
+        const size = await saveUpload(request, join(config.uploadsDir, uploadId), MAX_VIDEO_BYTES);
+        if (!size) { await unlink(join(config.uploadsDir, uploadId)).catch(() => {}); return json(response, 400, { error: "O arquivo chegou vazio." }); }
+        return json(response, 201, { uploadId, size });
+      }
+      if (request.method === "GET" && url.pathname === "/api/posts") {
+        let quota = null;
+        if (typeof meta.getPublishingLimit === "function" && meta.accessToken) {
+          try { quota = await meta.getPublishingLimit(); } catch { quota = null; }
+        }
+        return json(response, 200, { posts: await store.listPosts(), quota });
+      }
+      if (request.method === "POST" && url.pathname === "/api/posts") {
+        const input = JSON.parse(await readBody(request));
+        const uploadId = String(input.uploadId ?? "");
+        const info = UPLOAD_ID.test(uploadId) ? await stat(join(config.uploadsDir, uploadId)).catch(() => null) : null;
+        if (!info) return json(response, 400, { error: "O vídeo não foi encontrado no servidor. Envie de novo." });
+        const post = { ...createPost({ ...input, size: info.size }), mediaBaseUrl: publicBaseUrl(request) };
+        await store.addPost(post);
+        scheduler?.kick();
+        return json(response, 201, post);
+      }
+      const postPath = url.pathname.match(/^\/api\/posts\/([0-9a-f-]{36})(\/retry)?$/);
+      if (postPath && request.method === "DELETE" && !postPath[2]) {
+        const post = await store.getPost(postPath[1]);
+        if (!post) return json(response, 404, { error: "Post não encontrado." });
+        if (post.status === "publishing") return json(response, 400, { error: "Esse Reel está sendo publicado agora — espere terminar." });
+        if (post.status !== "published") await unlink(join(config.uploadsDir, post.uploadId)).catch(() => {});
+        await store.deletePost(post.id);
+        return json(response, 200, { ok: true });
+      }
+      if (postPath && request.method === "POST" && postPath[2]) {
+        const post = await store.getPost(postPath[1]);
+        if (!post) return json(response, 404, { error: "Post não encontrado." });
+        if (post.status !== "failed") return json(response, 400, { error: "Só dá pra tentar de novo um post que falhou." });
+        if (!(await stat(join(config.uploadsDir, post.uploadId)).catch(() => null))) return json(response, 400, { error: "O arquivo do vídeo não está mais no servidor. Envie de novo." });
+        const updated = await store.updatePost(post.id, { status: "scheduled", scheduledAt: new Date().toISOString(), error: null, mediaBaseUrl: publicBaseUrl(request) });
+        scheduler?.kick();
+        return json(response, 200, updated);
       }
       return serveStatic(request, response, url.pathname);
     } catch (error) {

@@ -6,6 +6,7 @@ import { createApp } from "./app.js";
 import { MetaClient } from "./meta/client.js";
 import { createStore } from "./storage/create-store.js";
 import { scheduleTokenRefresh, tokenFingerprint } from "./meta/token-refresh.js";
+import { createPostScheduler } from "./meta/reel-publisher.js";
 
 // Without these, one unhandled rejection anywhere in the process (a bad webhook
 // payload, a flaky Meta API call outside a try/catch) kills the whole instance —
@@ -48,7 +49,11 @@ if (env.ADMIN_PASSWORD && !env.ADMIN_USER) {
 const config = { verifyToken: env.META_VERIFY_TOKEN || "", appSecret: env.META_APP_SECRET || "",
   configured: Boolean(env.META_ACCESS_TOKEN && env.INSTAGRAM_ACCOUNT_ID && env.META_VERIFY_TOKEN && env.META_APP_SECRET),
   adminUser: env.ADMIN_USER || "", adminPassword: env.ADMIN_PASSWORD || "", sessionSecret, setupToken,
-  envPath: env.MANYDUDU_ENV_PATH || join(process.cwd(), ".env") };
+  envPath: env.MANYDUDU_ENV_PATH || join(process.cwd(), ".env"),
+  // vídeos à espera de publicação — precisa estar num volume persistente, senão um deploy apaga os agendados
+  uploadsDir: env.UPLOADS_PATH || join(process.cwd(), "data", "uploads") };
+const scheduler = createPostScheduler({ store, meta, uploadsDir: config.uploadsDir });
+await scheduler.start();
 if (!env.ADMIN_PASSWORD) {
   console.warn("AVISO: ADMIN_PASSWORD não definida — o login admin ficará bloqueado até configurar.");
   console.warn(`Configuração inicial: acesse http://SEU-ENDERECO/setup?token=${setupToken}`);
@@ -67,4 +72,7 @@ async function serveStatic(_request, response, pathname) {
   catch { response.writeHead(404); response.end("Not found"); }
 }
 
-createServer(createApp({ store, meta, config, serveStatic })).listen(port, () => console.log(`ManyDudu em http://localhost:${port}`));
+const server = createServer(createApp({ store, meta, config, serveStatic, scheduler }));
+// o padrão do Node (5 min por requisição) cortaria o envio de um vídeo grande numa conexão lenta
+server.requestTimeout = 60 * 60_000;
+server.listen(port, () => console.log(`ManyDudu em http://localhost:${port}`));

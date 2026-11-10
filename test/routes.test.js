@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { createHmac } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../src/app.js";
@@ -114,5 +114,91 @@ test("POST /api/campaigns/preview reports validation errors instead of rendering
   await withServer(async ({ baseUrl }) => {
     const res = await fetch(`${baseUrl}/api/campaigns/preview`, { method: "POST", headers: { ...authedHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ title: "x", ctaLabel: "Ir" }) });
     assert.equal(res.status, 400);
+  });
+});
+
+async function withUploadServer(run) {
+  const directory = await mkdtemp(join(tmpdir(), "manydudu-uploads-"));
+  const store = new JsonStore(join(directory, "db.json"));
+  await store.initialize();
+  const kicks = [];
+  const config = { verifyToken: "", appSecret: APP_SECRET, configured: false, adminUser: "eduardo", adminPassword: ADMIN_PASSWORD, sessionSecret: SECRET, uploadsDir: join(directory, "uploads") };
+  const scheduler = { kick: () => kicks.push(1) };
+  const server = createServer(createApp({ store, meta: {}, config, scheduler, serveStatic: (_req, res) => { res.writeHead(404); res.end(); } }));
+  await new Promise((resolve) => server.listen(0, resolve));
+  try {
+    await run({ baseUrl: `http://127.0.0.1:${server.address().port}`, store, kicks, uploadsDir: config.uploadsDir });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+const jsonHeaders = () => ({ ...authedHeaders(), "Content-Type": "application/json" });
+
+test("video upload + post creation queues a Reel and wakes the scheduler", async () => {
+  await withUploadServer(async ({ baseUrl, store, kicks }) => {
+    const upload = await fetch(`${baseUrl}/api/posts/upload`, { method: "POST", headers: { ...authedHeaders(), "Content-Type": "video/mp4" }, body: Buffer.from("fake-video") });
+    assert.equal(upload.status, 201);
+    const { uploadId, size } = await upload.json();
+    assert.match(uploadId, /\.mp4$/);
+    assert.equal(size, 10);
+    const created = await fetch(`${baseUrl}/api/posts`, { method: "POST", headers: jsonHeaders(),
+      body: JSON.stringify({ uploadId, fileName: "reel.mp4", kind: "trial", graduationStrategy: "MANUAL", caption: "oi" }) });
+    assert.equal(created.status, 201);
+    assert.equal(kicks.length, 1);
+    const [post] = await store.listPosts();
+    assert.equal(post.kind, "trial");
+    assert.equal(post.size, 10);
+  });
+});
+
+test("video upload rejects non-video content, anonymous requests and unknown upload ids", async () => {
+  await withUploadServer(async ({ baseUrl }) => {
+    const wrongType = await fetch(`${baseUrl}/api/posts/upload`, { method: "POST", headers: { ...authedHeaders(), "Content-Type": "text/html" }, body: "<script>" });
+    assert.equal(wrongType.status, 400);
+    const anonymous = await fetch(`${baseUrl}/api/posts/upload`, { method: "POST", headers: { "Content-Type": "video/mp4" }, body: "x" });
+    assert.equal(anonymous.status, 401);
+    const missing = await fetch(`${baseUrl}/api/posts`, { method: "POST", headers: jsonHeaders(),
+      body: JSON.stringify({ uploadId: "0b9f6c2e-1d3a-4c5b-9e8f-7a6b5c4d3e2f.mp4", kind: "reel" }) });
+    assert.equal(missing.status, 400);
+  });
+});
+
+test("the public /reel-media link serves the video (with Range) only while its post is publishing", async () => {
+  await withUploadServer(async ({ baseUrl, store }) => {
+    const { uploadId } = await (await fetch(`${baseUrl}/api/posts/upload`, { method: "POST", headers: { ...authedHeaders(), "Content-Type": "video/mp4" }, body: "0123456789" })).json();
+    const post = await (await fetch(`${baseUrl}/api/posts`, { method: "POST", headers: { ...jsonHeaders(), "X-Forwarded-Proto": "https", "X-Forwarded-Host": "painel.exemplo.com" },
+      body: JSON.stringify({ uploadId, kind: "reel", publishAt: new Date(Date.now() + 3_600_000).toISOString() }) })).json();
+    assert.equal(post.mediaBaseUrl, "https://painel.exemplo.com");
+    assert.equal((await fetch(`${baseUrl}/reel-media/${uploadId}`)).status, 404);
+    await store.updatePost(post.id, { status: "publishing" });
+    const full = await fetch(`${baseUrl}/reel-media/${uploadId}`);
+    assert.equal(full.status, 200);
+    assert.equal(full.headers.get("content-type"), "video/mp4");
+    assert.equal(await full.text(), "0123456789");
+    const partial = await fetch(`${baseUrl}/reel-media/${uploadId}`, { headers: { Range: "bytes=2-5" } });
+    assert.equal(partial.status, 206);
+    assert.equal(partial.headers.get("content-range"), "bytes 2-5/10");
+    assert.equal(await partial.text(), "2345");
+    assert.equal((await fetch(`${baseUrl}/reel-media/..%2Fdb.json`)).status, 404);
+  });
+});
+
+test("cancelling a scheduled Reel removes it and its video; retry only works for failed posts", async () => {
+  await withUploadServer(async ({ baseUrl, store, uploadsDir }) => {
+    const { uploadId } = await (await fetch(`${baseUrl}/api/posts/upload`, { method: "POST", headers: { ...authedHeaders(), "Content-Type": "video/quicktime" }, body: "v" })).json();
+    const post = await (await fetch(`${baseUrl}/api/posts`, { method: "POST", headers: jsonHeaders(),
+      body: JSON.stringify({ uploadId, kind: "reel", publishAt: new Date(Date.now() + 3_600_000).toISOString() }) })).json();
+    const retryScheduled = await fetch(`${baseUrl}/api/posts/${post.id}/retry`, { method: "POST", headers: authedHeaders() });
+    assert.equal(retryScheduled.status, 400);
+    await store.updatePost(post.id, { status: "failed", error: "x" });
+    const retry = await fetch(`${baseUrl}/api/posts/${post.id}/retry`, { method: "POST", headers: authedHeaders() });
+    assert.equal(retry.status, 200);
+    assert.equal((await store.getPost(post.id)).status, "scheduled");
+    const cancel = await fetch(`${baseUrl}/api/posts/${post.id}`, { method: "DELETE", headers: authedHeaders() });
+    assert.equal(cancel.status, 200);
+    assert.deepEqual(await store.listPosts(), []);
+    assert.deepEqual(await readdir(uploadsDir), []);
   });
 });

@@ -9,7 +9,7 @@
   <div class="grain"></div>
   <aside>
     <a class="brand" href="/" id="brand-link"><span id="brand-mark" class="brand-mark">MD</span> <span id="brand-name">manydudu</span></a>
-    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="inbox" data-scroll="top">✉ <span>DM</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button><button data-view="health" data-scroll="health">♡ <span>Saúde</span></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button><button data-view="carousel" data-scroll="carousel-section">▤ <span>Carrossel</span></button></nav>
+    <nav><button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span></button><button data-view="inbox" data-scroll="top">✉ <span>DM</span></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button><button data-view="health" data-scroll="health">♡ <span>Saúde</span></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button><button data-view="carousel" data-scroll="carousel-section">▤ <span>Carrossel</span></button><button data-view="publish" data-scroll="publish">▶ <span>Publicar</span></button></nav>
     <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
   </aside>
   <main id="top">
@@ -188,6 +188,53 @@
         </div>
         <div class="carousel-fields" id="carousel-fields"></div>
       </div>
+    </section>
+    </div>
+    <div id="view-publish" class="view" hidden>
+    <header><div><p class="eyebrow">DIRETO PRO INSTAGRAM</p><h1>Publicar<br><em>seus Reels.</em></h1></div><span class="publish-quota" id="publish-quota"></span></header>
+    <section class="media-section" id="publish">
+      <form id="publish-form" class="publish-form">
+        <div class="publish-grid">
+          <div class="publish-video">
+            <label class="video-drop" id="video-drop">
+              <input type="file" id="publish-file" accept="video/mp4,video/quicktime">
+              <span class="video-drop-text" id="video-drop-text"><b>＋ Escolher vídeo</b><small>ou arraste aqui · MP4 ou MOV · vertical 9:16 · 3 s a 15 min · até 1 GB</small></span>
+              <video id="publish-video-preview" controls playsinline muted hidden></video>
+            </label>
+            <p class="publish-file-name" id="publish-file-name"></p>
+          </div>
+          <div class="publish-fields">
+            <div class="field-block"><span class="field-title">Tipo</span>
+              <div class="choice-group">
+                <label class="choice"><input type="radio" name="kind" value="reel" checked><span><strong>Reels</strong><small>Vai pra todo mundo, seguidores inclusos.</small></span></label>
+                <label class="choice"><input type="radio" name="kind" value="trial"><span><strong>Trial Reels</strong><small>Só pra quem não te segue — teste sem queimar o perfil.</small></span></label>
+              </div>
+            </div>
+            <div class="field-block" id="publish-trial-options" hidden><span class="field-title">Se o Trial for bem</span>
+              <div class="choice-group">
+                <label class="choice"><input type="radio" name="graduationStrategy" value="MANUAL" checked><span><strong>Eu decido no app</strong><small>Você promove pros seguidores manualmente.</small></span></label>
+                <label class="choice"><input type="radio" name="graduationStrategy" value="SS_PERFORMANCE"><span><strong>Promover sozinho</strong><small>O Instagram mostra pros seguidores se tiver bom desempenho.</small></span></label>
+              </div>
+            </div>
+            <label class="follow-check" id="publish-feed-option"><input type="checkbox" name="shareToFeed" checked><span><strong>Mostrar também no feed</strong><small>Desmarque pra aparecer só na aba Reels.</small></span></label>
+            <label>Legenda <small class="label-note" id="caption-counter">0 / 2200 · 0 hashtags</small><textarea name="caption" rows="7" maxlength="2200" placeholder="Escreva a legenda… #hashtags e @menções funcionam normalmente."></textarea></label>
+            <div class="field-block"><span class="field-title">Quando</span>
+              <div class="choice-group">
+                <label class="choice"><input type="radio" name="when" value="now" checked><span><strong>Publicar agora</strong></span></label>
+                <label class="choice"><input type="radio" name="when" value="schedule"><span><strong>Agendar</strong></span></label>
+              </div>
+              <input type="datetime-local" name="publishAt" id="publish-at" aria-label="Data e hora da publicação" hidden>
+            </div>
+            <div class="publish-progress" id="publish-progress" hidden><div><i></i></div><span></span></div>
+            <p class="form-error" id="publish-error" role="alert"></p>
+            <button class="primary wide" id="publish-submit" type="submit">Publicar agora →</button>
+          </div>
+        </div>
+      </form>
+    </section>
+    <section class="media-section" id="publish-queue">
+      <div class="section-head"><div><p class="eyebrow">FILA</p><h2>Agendados e publicados</h2></div><button type="button" class="icon-btn" id="refresh-posts" title="Atualizar">↻</button></div>
+      <div id="posts-list" class="rule-list"></div>
     </section>
     </div>
   </main>
