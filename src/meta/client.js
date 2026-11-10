@@ -8,8 +8,24 @@ export class MetaClient {
     const host = accessToken?.startsWith("IG") ? "graph.instagram.com" : "graph.facebook.com";
     this.baseUrl = `https://${host}/${graphVersion}`;
     this.messagesPath = `${instagramAccountId}/messages`;
+    this.ownIds = new Set(instagramAccountId ? [String(instagramAccountId)] : []);
+    this.ownUsername = null;
     this.fetcher = fetcher;
     this.pacer = new MetaRequestPacer({ minIntervalMs: minWriteIntervalMs, now, sleep });
+  }
+
+  // A própria conta aparece com mais de um ID: o INSTAGRAM_ACCOUNT_ID (o "from.id" dos comentários
+  // dela) e o id do /me (escopo do login do Instagram). Guarda todos pra nunca responder a si mesma.
+  async loadOwnIdentity() {
+    const me = await this.#get("/me?fields=id,user_id,username");
+    for (const id of [me.id, me.user_id]) if (id) this.ownIds.add(String(id));
+    if (me.username) this.ownUsername = String(me.username).toLowerCase();
+    return { ids: [...this.ownIds], username: this.ownUsername };
+  }
+
+  isOwnAccount({ id, username } = {}) {
+    if (id && this.ownIds.has(String(id))) return true;
+    return Boolean(username && this.ownUsername && String(username).replace(/^@/, "").toLowerCase() === this.ownUsername);
   }
 
   setAccessToken(accessToken) {

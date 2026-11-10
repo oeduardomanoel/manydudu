@@ -29,6 +29,8 @@ const storedUsable = Boolean(storedToken?.accessToken) && !(storedToken.expiresA
   && (!env.META_ACCESS_TOKEN || !storedToken.origin || storedToken.origin === tokenFingerprint(env.META_ACCESS_TOKEN));
 if (storedUsable) meta.setAccessToken(storedToken.accessToken);
 if (env.META_ACCESS_TOKEN) scheduleTokenRefresh({ meta, store });
+// não bloqueia o boot: sem rede, a trava continua valendo pelo INSTAGRAM_ACCOUNT_ID
+if (env.META_ACCESS_TOKEN) meta.loadOwnIdentity().catch((error) => console.error(`Não consegui identificar a própria conta: ${error.message}`));
 
 const MIN_SECRET_LENGTH = 32;
 let sessionSecret = env.SESSION_SECRET || "";

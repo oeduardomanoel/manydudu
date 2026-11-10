@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { processComments } from "../src/app.js";
+import { processComments, processMessages } from "../src/app.js";
 
 test("combined automation sends a private reply and rotates a public reply", async () => {
   const calls = [];
@@ -124,4 +124,47 @@ test("fills {nome} and {palavra} in the private reply, the public reply and the 
   await processComments([{ id: "c1", authorId: "p1", username: "ana.silva", text: "quero o CRM", mediaId: "m" }], store, meta);
   assert.deepEqual(calls, ["Oi @ana.silva! Me responde SIM que eu te mando o crm", "@ana.silva, te mandei o crm na DM"]);
   assert.equal(pending.text, "Aqui está o crm, @ana.silva 👇");
+});
+
+test("never answers the account's own comment, even when its public reply contains the keyword", async () => {
+  const { MetaClient } = await import("../src/meta/client.js");
+  const calls = [];
+  const claimed = [];
+  const rule = { id: "r", name: "MÁQUINA", keyword: "MÁQUINA", match: "contains", enabled: true, responseMode: "both",
+    reply: "Oi {nome}!", publicReplies: ["Te mandei o MÁQUINA na DM 👊"] };
+  const store = {
+    claimEvent: async (id) => { claimed.push(id); return true; }, recordContactEvent: async () => {}, isContactPaused: async () => false,
+    getContact: async () => null, read: async () => ({ rules: [rule], activity: [] }), setPendingDelivery: async () => {}, log: async () => {}
+  };
+  const meta = new MetaClient({ accessToken: "IG-x", instagramAccountId: "17841474095084362", fetcher: async () => ({}) });
+  meta.reply = async (_id, text, mode) => { calls.push({ text, mode }); return mode === "private" ? { recipient_id: "p" } : { id: "x" }; };
+  await processComments([
+    { id: "own-1", authorId: "17841474095084362", username: "eduardosantos.ia", text: "Te mandei o MÁQUINA na DM 👊", mediaId: "m" },
+    { id: "fan-1", authorId: "999", username: "fa", text: "MÁQUINA", mediaId: "m" },
+  ], store, meta);
+  assert.deepEqual(claimed, ["fan-1"]);
+  assert.deepEqual(calls.map((call) => call.mode), ["private", "public"]);
+});
+
+test("isOwnAccount matches every id the account uses and its @, case-insensitively", async () => {
+  const { MetaClient } = await import("../src/meta/client.js");
+  const meta = new MetaClient({ accessToken: "IG-x", instagramAccountId: "17841",
+    fetcher: async () => ({ ok: true, json: async () => ({ id: "25168", user_id: "17841", username: "EduardoSantos.IA" }) }) });
+  assert.equal(meta.isOwnAccount({ id: "17841" }), true);
+  assert.equal(meta.isOwnAccount({ id: "25168" }), false);
+  await meta.loadOwnIdentity();
+  assert.equal(meta.isOwnAccount({ id: "25168" }), true);
+  assert.equal(meta.isOwnAccount({ username: "@eduardosantos.ia" }), true);
+  assert.equal(meta.isOwnAccount({ id: "999", username: "outra" }), false);
+});
+
+test("a DM coming from the account itself never triggers a link delivery", async () => {
+  const sent = [];
+  const store = {
+    claimEvent: async () => true, getContact: async () => ({ username: "x" }), recordContactEvent: async () => {}, isContactPaused: async () => false,
+    getPendingDelivery: async () => ({ ruleId: "r", text: "Aqui", url: "https://x.com", deliveryStyle: "text" }), consumePendingDelivery: async () => {}, log: async () => {}
+  };
+  const meta = { isOwnAccount: ({ id }) => id === "own", sendDirect: async (id) => { sent.push(id); }, getUserProfile: async () => ({}) };
+  await processMessages([{ id: "m1", senderId: "own", text: "oi", timestamp: Date.now() }, { id: "m2", senderId: "fan", text: "sim", timestamp: Date.now() }], store, meta);
+  assert.deepEqual(sent, ["fan"]);
 });

@@ -595,9 +595,14 @@ export function createApp({ store, meta, config, serveStatic, scheduler = null, 
   };
 }
 
+// As respostas públicas do robô (e qualquer comentário/DM do dono) voltam pelo webhook como evento
+// novo. Se o texto tiver a palavra-chave, a automação dispararia pra própria conta, em loop.
+const isOwnAccount = (meta, who) => typeof meta?.isOwnAccount === "function" && meta.isOwnAccount(who);
+
 export async function processComments(comments, store, meta) {
   for (const comment of comments) {
     try {
+    if (isOwnAccount(meta, { id: comment.authorId, username: comment.username })) continue;
     if (!(await store.claimEvent(comment.id))) continue;
     let username = comment.username || null;
     if (!username && comment.authorId) {
@@ -662,9 +667,10 @@ export async function processComments(comments, store, meta) {
   }
 }
 
-async function processMessages(messages, store, meta) {
+export async function processMessages(messages, store, meta) {
   for (const message of messages) {
     try {
+    if (isOwnAccount(meta, { id: message.senderId })) continue;
     if (!(await store.claimEvent(message.id))) continue;
     const existing = await store.getContact(message.senderId);
     let username = existing?.username || null;
