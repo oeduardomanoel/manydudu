@@ -1191,9 +1191,51 @@ function setPublishFile(file) {
   syncPublishForm();
 }
 
+// Automação que nasce com o Reel: mesmas sugestões da tela de automações, e o mesmo cuidado de
+// nunca sobrescrever o que a pessoa escreveu.
+const publishAutoFilled = new Map();
+let publishSuggestionSeed = 0;
+
+function applyPublishSuggestions({ force = false } = {}) {
+  const form = $("#publish-form");
+  const keyword = form.elements.autoKeyword.value.trim();
+  if (!keyword) return;
+  const suggestions = suggestReplies(keyword, { followUp: form.elements.autoFollowUp.checked, seed: publishSuggestionSeed });
+  const values = { autoReply: suggestions.reply, autoPublicReplies: suggestions.publicReplies.join("\n"), autoFollowUpText: suggestions.followUpText };
+  const replaceable = (name) => !form.elements[name].value.trim() || form.elements[name].value === publishAutoFilled.get(name);
+  let names = Object.keys(values).filter(replaceable);
+  if (force && !names.length) {
+    if (!confirm("Você já escreveu as mensagens. Trocar todas pelas sugestões?")) return;
+    names = Object.keys(values);
+  }
+  for (const name of names) { form.elements[name].value = values[name]; publishAutoFilled.set(name, values[name]); }
+}
+
+function publishAutomationPayload() {
+  const form = $("#publish-form");
+  if (!form.elements.automationEnabled.checked) return null;
+  const handle = state.health?.token?.username || state.settings.brandHandle || "";
+  const followUp = form.elements.autoFollowUp.checked;
+  const requireFollow = followUp && form.elements.autoRequireFollow.checked;
+  return {
+    keyword: form.elements.autoKeyword.value.trim(),
+    publicReplies: form.elements.autoPublicReplies.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+    reply: form.elements.autoReply.value,
+    followUpEnabled: followUp,
+    followUpUrl: followUp ? form.elements.autoFollowUpUrl.value.trim() : "",
+    followUpText: followUp ? form.elements.autoFollowUpText.value : "",
+    deliveryStyle: "button", buttonTitle: "ACESSAR MATERIAL",
+    requireFollow,
+    ...(requireFollow ? { profileUrl: `https://www.instagram.com/${handle}/`, followPrompt: `Ainda falta um passo: siga @${handle} e depois toque em JÁ SEGUI ✨`,
+      followButtonTitle: "VER PERFIL", confirmFollowTitle: "JÁ SEGUI" } : {}),
+  };
+}
+
 function syncPublishForm() {
   const form = $("#publish-form");
   const trial = form.elements.kind.value === "trial";
+  $("#publish-automation-fields").hidden = !form.elements.automationEnabled.checked;
+  $("#publish-auto-delivery").hidden = !form.elements.autoFollowUp.checked;
   const scheduled = form.elements.when.value === "schedule";
   $("#publish-trial-options").hidden = !trial;
   $("#publish-feed-option").hidden = trial;
@@ -1281,8 +1323,11 @@ function renderPosts() {
     return `<article class="post-row">
       <div><h3>${escapeHtml(truncate(post.caption || "Sem legenda", 90))} <span class="post-status ${tone}">${label}</span></h3>
       <p>${escapeHtml(kind)} · ${escapeHtml(when)} · ${escapeHtml(post.fileName)}</p>
-      ${post.error ? `<p class="post-error">${escapeHtml(post.error)}</p>` : ""}</div>
+      ${post.automation ? `<p class="post-automation">⚡ Automação “${escapeHtml(post.automation.keyword)}” ${post.ruleId ? "· criada e ativa" : post.status === "published" ? "" : "· será criada quando o Reel sair"}</p>` : ""}
+      ${post.error ? `<p class="post-error">${escapeHtml(post.error)}</p>` : ""}
+      ${post.automationError ? `<p class="post-error">${escapeHtml(post.automationError)}</p>` : ""}</div>
       <div class="rule-actions">
+        ${post.ruleId ? `<button class="edit-rule" data-post-rule="${escapeHtml(post.ruleId)}">Editar automação</button>` : ""}
         ${post.permalink ? `<a class="edit-rule" href="${escapeHtml(post.permalink)}" target="_blank" rel="noopener">Ver no Instagram</a>` : ""}
         ${post.status === "failed" ? `<button class="edit-rule" data-retry-post="${escapeHtml(post.id)}">Tentar de novo</button>` : ""}
         ${post.status !== "publishing" ? `<button class="icon-btn" data-delete-post="${escapeHtml(post.id)}" title="${post.status === "published" ? "Tirar da lista (o Reel continua no Instagram)" : "Cancelar"}">×</button>` : ""}
@@ -1316,6 +1361,15 @@ $("#publish-form").addEventListener("submit", async (event) => {
   if (!publishFile) { error.textContent = "Escolha o vídeo primeiro."; return; }
   const scheduled = form.elements.when.value === "schedule";
   if (scheduled && !form.elements.publishAt.value) { error.textContent = "Escolha a data e a hora do agendamento."; return; }
+  const automation = publishAutomationPayload();
+  if (automation) {
+    const problem = !automation.keyword ? "Escolha a palavra-chave da automação."
+      : !automation.reply.trim() ? "Escreva a mensagem do privado da automação."
+      : !automation.publicReplies.length ? "Escreva ao menos uma resposta pública da automação."
+      : automation.followUpEnabled && !/^https:\/\//i.test(automation.followUpUrl) ? "O link da automação precisa começar com https://"
+      : automation.requireFollow && !(state.health?.token?.username || state.settings.brandHandle) ? "Pra exigir que siga, configure o @ do perfil em Marca." : null;
+    if (problem) { error.textContent = problem; return; }
+  }
   const submit = $("#publish-submit");
   submit.disabled = true;
   try {
@@ -1323,11 +1377,13 @@ $("#publish-form").addEventListener("submit", async (event) => {
     setPublishProgress(1, scheduled ? "Agendando…" : "Vídeo enviado — publicando no Instagram (pode levar alguns minutos)…");
     await request("/api/posts", { method: "POST", body: JSON.stringify({
       uploadId, fileName: publishFile.name, kind: form.elements.kind.value, graduationStrategy: form.elements.graduationStrategy.value,
-      shareToFeed: form.elements.shareToFeed.checked, caption: form.elements.caption.value,
+      shareToFeed: form.elements.shareToFeed.checked, caption: form.elements.caption.value, automation: publishAutomationPayload(),
       publishAt: scheduled ? new Date(form.elements.publishAt.value).toISOString() : null,
     }) });
     form.reset();
     publishFile = null;
+    publishAutoFilled.clear();
+    publishSuggestionSeed = 0;
     $("#publish-video-preview").hidden = true;
     $("#publish-video-preview").removeAttribute("src");
     $("#video-drop").classList.remove("has-video");
@@ -1345,7 +1401,31 @@ $("#publish-form").addEventListener("submit", async (event) => {
   }
 });
 $("#refresh-posts").addEventListener("click", () => loadPosts());
+$("#publish-form").elements.autoKeyword.addEventListener("input", () => applyPublishSuggestions());
+$("#publish-form").elements.autoFollowUp.addEventListener("change", () => applyPublishSuggestions());
+$("#publish-suggest").addEventListener("click", () => {
+  if (!$("#publish-form").elements.autoKeyword.value.trim()) { $("#publish-error").textContent = "Digite a palavra-chave primeiro."; return; }
+  publishSuggestionSeed += 1;
+  applyPublishSuggestions({ force: true });
+});
+$("#insert-keyword").addEventListener("click", () => {
+  const form = $("#publish-form");
+  const keyword = form.elements.autoKeyword.value.trim().toUpperCase();
+  if (!keyword) { $("#publish-error").textContent = "Digite a palavra-chave primeiro."; return; }
+  const caption = form.elements.caption;
+  // palavra inteira ("skills" não conta como "SKILL"); \b não serve com acento, por isso a classe Unicode
+  const asWord = new RegExp(`(^|[^\\p{L}\\p{N}])${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, "iu");
+  if (!asWord.test(caption.value)) caption.value = `${caption.value.trimEnd()}${caption.value.trim() ? "\n\n" : ""}Comenta ${keyword} que eu te mando no direct 👇`;
+  syncPublishForm();
+});
 $("#posts-list").addEventListener("click", async (event) => {
+  const ruleId = event.target.closest("[data-post-rule]")?.dataset.postRule;
+  if (ruleId) {
+    await renderDashboard();
+    const rule = state.rules.find((item) => item.id === ruleId);
+    if (rule) openRuleDialog(null, rule); else alert("Essa automação foi apagada.");
+    return;
+  }
   const retry = event.target.closest("[data-retry-post]")?.dataset.retryPost;
   const remove = event.target.closest("[data-delete-post]")?.dataset.deletePost;
   try {

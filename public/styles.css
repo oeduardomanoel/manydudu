@@ -272,3 +272,12 @@ nav{min-height:0;overflow-y:auto;margin-top:34px}
 .week-day em{width:6px;height:6px;border-radius:50%;background:var(--cyan)}
 .week-day em.done{background:var(--green)}
 .campaign-card-actions .edit-rule{white-space:nowrap}
+.publish-automation{margin-bottom:18px;padding:4px 14px 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface2)}
+.publish-automation>.follow-check{border:0;margin:0!important}
+#publish-automation-fields{padding:4px 0 8px}
+#publish-automation-fields[hidden],#publish-auto-delivery[hidden]{display:none}
+#publish-automation-fields>label,#publish-auto-delivery>label{margin-bottom:12px}
+.keyword-row{display:flex;align-items:flex-end;gap:10px;margin-bottom:12px}
+.keyword-row label{flex:1;margin:0}
+.keyword-row .edit-rule{min-height:40px;white-space:nowrap}
+.post-row .post-automation{margin-top:4px;color:var(--cyan)}

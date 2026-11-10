@@ -1,5 +1,6 @@
 import { readdir, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { createRule } from "../domain/automation.js";
 import { duePosts, referencedUploads, UPLOAD_ID } from "../domain/publishing.js";
 
 const ORPHAN_UPLOAD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -44,12 +45,27 @@ export function createPostScheduler({ store, meta, uploadsDir, intervalMs = 30_0
       await store.updatePost(post.id, { status: "published", publishedAt: new Date().toISOString(), ...result });
       await unlink(filePath).catch(() => {});
       log(`Reel publicado: ${result.permalink || result.mediaId}`);
+      if (post.automation) await attachAutomation(post, result.mediaId);
     } catch (error) {
       const message = error.code === "ENOENT" ? "O arquivo do vídeo não está mais no servidor. Envie de novo." : error.message;
       await store.updatePost(post.id, { status: "failed", failedAt: new Date().toISOString(), error: message }).catch(() => {});
       logError(`Falha ao publicar Reel ${post.id}: ${message}`);
     } finally {
       running.delete(post.id);
+    }
+  }
+
+  // O Reel já está no ar: falha aqui não desfaz a publicação, só avisa no post pra criar a automação na mão.
+  async function attachAutomation(post, mediaId) {
+    try {
+      const firstLine = String(post.caption || "").split("\n")[0].trim();
+      const rule = createRule({ ...post.automation, mediaId, mediaTitle: firstLine || "Reel publicado pelo painel" });
+      await store.addRule(rule);
+      await store.updatePost(post.id, { ruleId: rule.id, automationError: null });
+      log(`Automação "${rule.keyword}" criada pro Reel ${mediaId}`);
+    } catch (error) {
+      await store.updatePost(post.id, { automationError: `O Reel saiu, mas a automação não foi criada: ${error.message}` }).catch(() => {});
+      logError(`Falha ao criar automação do Reel ${post.id}: ${error.message}`);
     }
   }
 

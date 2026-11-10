@@ -231,6 +231,21 @@
             </div>
             <label class="follow-check" id="publish-feed-option"><input type="checkbox" name="shareToFeed" checked><span><strong>Mostrar também no feed</strong><small>Desmarque pra aparecer só na aba Reels.</small></span></label>
             <label>Legenda <small class="label-note" id="caption-counter">0 / 2200 · 0 hashtags</small><textarea name="caption" rows="7" maxlength="2200" placeholder="Escreva a legenda… #hashtags e @menções funcionam normalmente."></textarea></label>
+            <div class="publish-automation">
+              <label class="follow-check"><input type="checkbox" name="automationEnabled"><span><strong>Responder os comentários desse Reel automaticamente</strong><small>A automação é criada no instante em que o Reel for publicado — e só vale pra ele.</small></span></label>
+              <div id="publish-automation-fields" hidden>
+                <div class="keyword-row"><label>Palavra-chave<input name="autoKeyword" placeholder="SKILL" maxlength="60"></label><button type="button" class="edit-rule" id="insert-keyword" title="Acrescenta “Comenta PALAVRA que eu te mando no direct” na legenda">＋ Pôr na legenda</button></div>
+                <label>Respostas públicas <small class="label-note">uma por linha · o painel faz rodízio</small><textarea name="autoPublicReplies" rows="4" maxlength="10009"></textarea></label>
+                <label>Mensagem no privado<textarea name="autoReply" rows="3" maxlength="1000"></textarea></label>
+                <label class="follow-check"><input type="checkbox" name="autoFollowUp" checked><span><strong>Mandar um link quando a pessoa responder a DM</strong><small>A resposta dela abre a janela de 24 h do Instagram e libera o link.</small></span></label>
+                <div id="publish-auto-delivery">
+                  <label>Link HTTPS<input name="autoFollowUpUrl" type="url" placeholder="https://seusite.com/material"></label>
+                  <label>Mensagem de entrega<textarea name="autoFollowUpText" rows="2" maxlength="900"></textarea></label>
+                  <label class="follow-check"><input type="checkbox" name="autoRequireFollow"><span><strong>Exigir que siga o perfil antes do link</strong><small>Usa o @ configurado em Marca.</small></span></label>
+                </div>
+                <div class="suggest-bar"><span><b>{nome}</b> vira o @ de quem comentou. Sugestões montadas a partir da palavra-chave — o que você editar fica.</span><button type="button" class="edit-rule" id="publish-suggest">✦ Gerar outras</button></div>
+              </div>
+            </div>
             <div class="field-block"><span class="field-title">Quando</span>
               <div class="choice-group">
                 <label class="choice"><input type="radio" name="when" value="now" checked><span><strong>Publicar agora</strong></span></label>

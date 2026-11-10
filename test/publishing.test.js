@@ -106,6 +106,45 @@ test("scheduler publishes due posts, records the permalink and deletes the video
   });
 });
 
+const automation = { keyword: "skill", reply: "Oi {nome}! Responde SIM que eu te mando a {palavra}", publicReplies: ["Te mandei na DM 👊", "Olha a DM aí"],
+  followUpEnabled: true, followUpText: "Aqui está 👇", followUpUrl: "https://exemplo.com/skill", deliveryStyle: "button", buttonTitle: "ACESSAR" };
+
+test("createPost keeps a validated comment automation and rejects an invalid one before scheduling", () => {
+  const post = createPost({ ...base, automation }, { now: NOW });
+  assert.equal(post.automation.keyword, "skill");
+  assert.equal(post.automation.responseMode, "both");
+  assert.equal(post.automation.match, "contains");
+  assert.equal(createPost(base, { now: NOW }).automation, null);
+  assert.equal(createPost({ ...base, automation: { ...automation, enabled: false } }, { now: NOW }).automation, null);
+  assert.throws(() => createPost({ ...base, automation: { ...automation, followUpUrl: "http://inseguro.com" } }, { now: NOW }), AppError);
+  assert.throws(() => createPost({ ...base, automation: { keyword: "skill" } }, { now: NOW }), AppError);
+});
+
+test("scheduler creates the comment automation tied to the new Reel id after publishing", async () => {
+  await withStore(async ({ store, uploadsDir }) => {
+    await writeFile(join(uploadsDir, UPLOAD), "video");
+    const post = await store.addPost(queued({ caption: "3 skills do Claude\nComenta SKILL", automation: createPost({ ...base, automation }).automation }));
+    const scheduler = createPostScheduler({ store, meta: {}, uploadsDir, ...quiet, publish: async () => ({ containerId: "c", mediaId: "1790000", permalink: null }) });
+    await scheduler.tick();
+    const { rules } = await store.read();
+    assert.equal(rules.length, 1);
+    assert.equal(rules[0].mediaId, "1790000");
+    assert.equal(rules[0].mediaTitle, "3 skills do Claude");
+    assert.equal(rules[0].keyword, "skill");
+    assert.equal((await store.getPost(post.id)).ruleId, rules[0].id);
+  });
+});
+
+test("a failed publish never creates the automation", async () => {
+  await withStore(async ({ store, uploadsDir }) => {
+    await writeFile(join(uploadsDir, UPLOAD), "video");
+    await store.addPost(queued({ automation: createPost({ ...base, automation }).automation }));
+    const scheduler = createPostScheduler({ store, meta: {}, uploadsDir, ...quiet, publish: async () => { throw new Error("Meta fora"); } });
+    await scheduler.tick();
+    assert.deepEqual((await store.read()).rules, []);
+  });
+});
+
 test("scheduler marks failures, keeps the file for a retry and recovers posts interrupted mid-publish", async () => {
   await withStore(async ({ store, uploadsDir }) => {
     await writeFile(join(uploadsDir, UPLOAD), "video");

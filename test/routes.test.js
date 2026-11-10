@@ -153,6 +153,20 @@ test("video upload + post creation queues a Reel and wakes the scheduler", async
   });
 });
 
+test("scheduling a Reel with a comment automation stores it, and an incomplete automation is refused", async () => {
+  await withUploadServer(async ({ baseUrl, store }) => {
+    const { uploadId } = await (await fetch(`${baseUrl}/api/posts/upload`, { method: "POST", headers: { ...authedHeaders(), "Content-Type": "video/mp4" }, body: "v" })).json();
+    const bad = await fetch(`${baseUrl}/api/posts`, { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ uploadId, kind: "reel", automation: { keyword: "skill" } }) });
+    assert.equal(bad.status, 400);
+    assert.match((await bad.json()).error, /obrigatórias|resposta/i);
+    const ok = await fetch(`${baseUrl}/api/posts`, { method: "POST", headers: jsonHeaders(),
+      body: JSON.stringify({ uploadId, kind: "reel", automation: { keyword: "skill", reply: "Oi {nome}!", publicReplies: ["Olha a DM"] } }) });
+    assert.equal(ok.status, 201);
+    const [post] = await store.listPosts();
+    assert.equal(post.automation.keyword, "skill");
+  });
+});
+
 test("video upload rejects non-video content, anonymous requests and unknown upload ids", async () => {
   await withUploadServer(async ({ baseUrl }) => {
     const wrongType = await fetch(`${baseUrl}/api/posts/upload`, { method: "POST", headers: { ...authedHeaders(), "Content-Type": "text/html" }, body: "<script>" });

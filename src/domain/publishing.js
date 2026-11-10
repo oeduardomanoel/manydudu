@@ -1,5 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { AppError } from "../util/errors.js";
+import { createRule } from "./automation.js";
+
+const AUTOMATION_FIELDS = ["name", "keyword", "match", "responseMode", "reply", "publicReplies", "followUpEnabled", "followUpText", "followUpUrl",
+  "requireFollow", "followPrompt", "profileUrl", "followButtonTitle", "confirmFollowTitle", "deliveryStyle", "buttonTitle"];
+
+// Automação de comentário que nasce junto com o Reel: o Reel agendado ainda não tem ID no
+// Instagram, então ela fica guardada no post e só vira regra (presa ao ID) quando ele for publicado.
+// Valida já agora com as mesmas regras de uma automação normal, pra erro aparecer na hora de agendar.
+export function normalizePostAutomation(input) {
+  if (!input || input.enabled === false) return null;
+  const automation = Object.fromEntries(AUTOMATION_FIELDS.filter((key) => input[key] !== undefined).map((key) => [key, input[key]]));
+  automation.match ??= "contains";
+  automation.responseMode ??= "both";
+  createRule({ ...automation, mediaId: "pendente" });
+  return automation;
+}
 
 export const MAX_CAPTION_LENGTH = 2200;
 export const MAX_HASHTAGS = 30;
@@ -44,6 +60,7 @@ export function createPost(input, { now = Date.now() } = {}) {
     graduationStrategy,
     shareToFeed: kind === "reel" ? input.shareToFeed !== false : false,
     caption,
+    automation: normalizePostAutomation(input.automation),
     scheduled,
     scheduledAt,
     status: "scheduled",
