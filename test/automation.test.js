@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRule, findMatchingRule, selectPublicReply, suggestKeywords, updateRule } from "../src/domain/automation.js";
+import { createRule, findMatchingRule, personalize, selectPublicReply, suggestKeywords, updateRule } from "../src/domain/automation.js";
 
 const rules = [
   { id: "1", keyword: "quero", match: "contains", enabled: true },
@@ -145,4 +145,14 @@ test("suggestKeywords respects the limit option", () => {
     { text: `palavra${index}`, status: "ignored", at: "2026-01-01T11:00:00.000Z" },
   ])).flat();
   assert.equal(suggestKeywords(activity, { minCount: 2, limit: 3 }).length, 3);
+});
+
+test("personalize fills {nome} with the @username and {palavra} with the keyword", () => {
+  assert.equal(personalize("Oi {nome}, segue o {palavra}!", { username: "ana", keyword: "CRM" }), "Oi @ana, segue o CRM!");
+  assert.equal(personalize("{NOME} {Palavra}", { username: "@bia", keyword: " ia " }), "@bia ia");
+});
+
+test("personalize drops {nome} cleanly when the username is unknown", () => {
+  assert.equal(personalize("Oi {nome}! Te mandei", { keyword: "x" }), "Oi! Te mandei");
+  assert.equal(personalize(undefined, {}), "");
 });

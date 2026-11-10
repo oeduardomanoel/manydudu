@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createPost, MAX_VIDEO_BYTES, UPLOAD_ID, VIDEO_TYPES } from "./domain/publishing.js";
-import { createRule, findMatchingRule, selectPublicReply, suggestKeywords, updateRule } from "./domain/automation.js";
+import { createRule, findMatchingRule, personalize, selectPublicReply, suggestKeywords, updateRule } from "./domain/automation.js";
 import { buildAnalytics, buildKpis } from "./domain/analytics.js";
 import { extractComments, extractMessages, extractPostbacks, parseSignedRequest, verifyMetaSignature } from "./meta/webhook.js";
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
@@ -617,28 +617,30 @@ export async function processComments(comments, store, meta) {
     if (!rule) { await store.log({ ...context, status: "ignored" }); continue; }
     if (comment.authorId && ["private", "both"].includes(rule.responseMode)) {
       const contact = await store.getContact(comment.authorId);
-      if (isFatigued(contact?.history, rule.reply)) {
+      if (isFatigued(contact?.history, personalize(rule.reply, { username, keyword: rule.keyword }))) {
         await store.log({ ...context, status: "ignored", reason: "fatigue_guard", ruleId: rule.id, rule: rule.name });
         continue;
       }
     }
     try {
+      const fill = (text) => personalize(text, { username, keyword: rule.keyword });
       let privateResult = null;
       if (["private", "both"].includes(rule.responseMode)) {
-        privateResult = await meta.reply(comment.id, rule.reply, "private");
+        const privateText = fill(rule.reply);
+        privateResult = await meta.reply(comment.id, privateText, "private");
         if (comment.authorId) await store.recordContactEvent({ contactId: comment.authorId, username,
-          type: "outgoing_rule", text: rule.reply, ruleId: rule.id, at: new Date().toISOString() });
+          type: "outgoing_rule", text: privateText, ruleId: rule.id, at: new Date().toISOString() });
       }
       if (rule.followUpEnabled && privateResult?.recipient_id) await store.setPendingDelivery(String(privateResult.recipient_id), {
-        ruleId: rule.id, ruleName: rule.name, text: rule.followUpText, url: rule.followUpUrl,
-        requireFollow: rule.requireFollow, followPrompt: rule.followPrompt,
+        ruleId: rule.id, ruleName: rule.name, text: fill(rule.followUpText), url: rule.followUpUrl,
+        requireFollow: rule.requireFollow, followPrompt: fill(rule.followPrompt),
         deliveryStyle: rule.deliveryStyle, buttonTitle: rule.buttonTitle,
         profileUrl: rule.profileUrl, followButtonTitle: rule.followButtonTitle, confirmFollowTitle: rule.confirmFollowTitle,
         mediaId: comment.mediaId, createdAt: new Date().toISOString()
       });
       if (["public", "both"].includes(rule.responseMode)) {
         const sentCount = activity.filter((event) => event.ruleId === rule.id && event.status === "sent").length;
-        const publicReply = selectPublicReply(rule, sentCount);
+        const publicReply = fill(selectPublicReply(rule, sentCount));
         try { await meta.reply(comment.id, publicReply, "public"); }
         catch (error) {
           await store.log({ ...context, status: "public_failed", ruleId: rule.id, rule: rule.name,

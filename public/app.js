@@ -1,4 +1,5 @@
 import { createEditor, wireToolbar } from "/editor.js";
+import { suggestReplies } from "/reply-suggestions.js";
 import { checkOnboarding } from "/onboarding.js";
 import "/carousel.js";
 
@@ -74,6 +75,7 @@ async function renderDashboard() {
   $("#rule-total").textContent = `${active} de ${dashboard.rules.length} ${dashboard.rules.length === 1 ? "regra ativa" : "regras ativas"}`;
   $("#connection").textContent = dashboard.configured ? "Conectado ✓" : "configuração pendente";
   renderRules(dashboard.rules);
+  state.activity = dashboard.activity;
   renderActivity(dashboard.activity);
   renderKeywordSuggestions(dashboard.keywordSuggestions || []);
 }
@@ -95,8 +97,34 @@ function renderRules(rules) {
   </article>`).join("") : '<p class="empty">Nenhum fluxo ainda.<br>Escolha um Reel e crie a primeira palavra-chave.</p>';
 }
 
+// Cada evento do log vira uma frase de gente ("@ana recebeu o link de CRM") em vez do status técnico.
+function describeEvent(event) {
+  const who = event.username ? `<b>@${escapeHtml(event.username)}</b>` : "<b>alguém</b>";
+  const rule = event.rule ? `<b>${escapeHtml(event.rule)}</b>` : "";
+  const said = event.text ? `comentou “${escapeHtml(truncate(event.text, 60))}”` : "";
+  switch (event.status) {
+    case "sent": return ["out", "↗", `DM enviada pra ${who}`, [said, event.rule && `automação ${escapeHtml(event.rule)}`].filter(Boolean).join(" · ")];
+    case "delivered": return ["ok", "✓", `${who} recebeu o link${rule ? ` de ${rule}` : ""}`, "depois de responder a DM"];
+    case "waiting_follow": return ["wait", "◷", `${who} ainda não segue o perfil`, "pedido pra seguir enviado · aguardando"];
+    case "public_failed": return ["bad", "!", `A resposta pública pra ${who} falhou`, event.error ? escapeHtml(truncate(event.error, 90)) : "a DM foi enviada normalmente"];
+    case "failed": return ["bad", "!", `Falha ao responder ${who}`, escapeHtml(truncate(event.error || event.text || "", 90))];
+    case "login_failed": return ["bad", "⚿", "Tentativa de login no painel recusada", event.user ? `usuário “${escapeHtml(event.user)}”` : ""];
+    case "ignored":
+      if (event.reason === "fatigue_guard") return ["muted", "↺", `Não reenviei pra ${who}`, "já recebeu essa mensagem nas últimas 24 h"];
+      if (event.reason === "human_takeover") return ["muted", "✋", `Conversa com ${who} está com você`, "automação pausada pra esse contato"];
+      return ["muted", "·", `${who} ${said || "comentou"}`, "nenhuma automação bateu com esse comentário"];
+    default: return ["muted", "·", `${who}: ${escapeHtml(event.text || event.status)}`, ""];
+  }
+}
+
 function renderActivity(activity) {
-  $("#activity").innerHTML = activity.length ? activity.slice(0, 8).map((event) => `<article class="event ${event.status}"><span class="dot"></span><div><strong>@${escapeHtml(event.username)}</strong><p>${escapeHtml(event.text)}</p><time>${new Date(event.at).toLocaleString("pt-BR")}</time></div></article>`).join("") : '<p class="empty">Os comentários processados aparecerão aqui.</p>';
+  // as respostas públicas da própria conta voltam pelo webhook como comentário "ignorado" — é só ruído aqui
+  const ownHandle = (state.health?.token?.username || state.settings.brandHandle || "").toLowerCase();
+  const events = activity.filter((event) => !(event.status === "ignored" && ownHandle && String(event.username || "").toLowerCase() === ownHandle));
+  $("#activity").innerHTML = events.length ? events.slice(0, 10).map((event) => {
+    const [tone, icon, title, detail] = describeEvent(event);
+    return `<article class="feed-event ${tone}"><span class="feed-icon">${icon}</span><div><p>${title}</p>${detail ? `<small>${detail}</small>` : ""}</div><time title="${escapeHtml(new Date(event.at).toLocaleString("pt-BR"))}">${relativeTime(event.at).replace(/^há /, "")}</time></article>`;
+  }).join("") : '<p class="empty">Os comentários processados aparecerão aqui.</p>';
 }
 
 async function loadMedia() {
@@ -122,7 +150,14 @@ async function loadAnalytics() {
     ["Comentários capturados", analytics.total.captured], ["Primeiras DMs", analytics.total.dmSent],
     ["Respostas recebidas", analytics.total.replied], ["Materiais entregues", analytics.total.delivered]
   ];
-  $("#funnel").innerHTML = stages.map(([label, value], index) => `<article><small>0${index + 1}</small><strong>${value}</strong><span>${label}</span>${index < stages.length - 1 ? '<i>→</i>' : ""}</article>`).join("");
+  // funil em barras: a largura mostra quanto sobra de cada etapa e o % é a passagem da etapa anterior
+  const top = Math.max(1, stages[0][1]);
+  $("#funnel").className = "funnel-bars";
+  $("#funnel").innerHTML = stages.map(([label, value], index) => {
+    const previous = index ? stages[index - 1][1] : null;
+    const step = previous ? `${Math.round(value / previous * 100)}% da etapa anterior` : "ponto de partida";
+    return `<div class="funnel-row"><span>${label}</span><div class="funnel-bar"><i style="width:${Math.max(value ? 2 : 0, Math.round(value / top * 100))}%"></i></div><b>${value.toLocaleString("pt-BR")}<em>${step}</em></b></div>`;
+  }).join("");
   $("#analytics-period").textContent = `${analytics.total.deliveryRate}% de entrega`;
   renderKpis(analytics.kpis);
   $("#rule-metrics").innerHTML = analytics.rules.length ? analytics.rules.map((rule) => `<article><div><strong>${escapeHtml(rule.name)}</strong><small>${rule.enabled ? "ativa" : "pausada"}</small></div><span>${rule.captured} capturas</span><span>${rule.replied} respostas</span><b>${rule.deliveryRate}%</b></article>`).join("") : '<p class="empty">Crie uma automação para começar a medir o funil.</p>';
@@ -527,6 +562,7 @@ async function loadHealth() {
     const report = await request("/api/health");
     state.health = report;
     renderStatusStrip();
+    if (state.activity) renderActivity(state.activity);
     const { token } = report;
     const tokenLabel = !token.configured ? "Não configurado"
       : token.expired ? "Expirado — gere um novo"
@@ -557,6 +593,7 @@ async function loadWebhookSettings() {
   });
   if (settings.brandLogoUrl) $("#brand-logo-preview").src = settings.brandLogoUrl;
   applyBranding(settings);
+  if (state.activity) renderActivity(state.activity);
 }
 
 $("#webhook-form").addEventListener("submit", async (event) => {
@@ -760,7 +797,11 @@ function openRuleDialog(media = null, rule = null) {
   form.elements.publicReplies.value = Array.isArray(rule?.publicReplies) ? rule.publicReplies.join("\n") : "";
   form.elements.followUpEnabled.checked = Boolean(rule?.followUpEnabled);
   form.elements.requireFollow.checked = Boolean(rule?.requireFollow);
+  autoFilled.clear();
+  suggestionSeed = 0;
   if (!rule) {
+    // quase toda automação usa resposta pública + DM — começa por ela
+    form.elements.responseMode.value = "both";
     form.elements.deliveryStyle.value = "button";
     form.elements.buttonTitle.value = "ACESSAR MATERIAL";
     const handle = state.settings.brandHandle;
@@ -824,6 +865,30 @@ function syncResponseModeFields() {
     $("#delivery-fields").hidden = true;
     $("#follow-prompt-fields").hidden = true;
   }
+}
+
+// Sugestões automáticas: só preenchem campo vazio ou que ainda tem o texto que elas mesmas
+// colocaram — o que a pessoa escreveu à mão nunca é sobrescrito sem confirmação.
+const autoFilled = new Map();
+let suggestionSeed = 0;
+
+function applyReplySuggestions({ force = false } = {}) {
+  const form = $("#rule-form");
+  const keyword = form.elements.keyword.value.trim();
+  if (!keyword) return;
+  const suggestions = suggestReplies(keyword, { followUp: form.elements.followUpEnabled.checked, seed: suggestionSeed });
+  const values = { reply: suggestions.reply, publicReplies: suggestions.publicReplies.join("\n"), followUpText: suggestions.followUpText };
+  const replaceable = (name) => !form.elements[name].value.trim() || form.elements[name].value === autoFilled.get(name);
+  let names = Object.keys(values).filter(replaceable);
+  if (force && !names.length) {
+    if (!confirm("Você já escreveu as mensagens. Trocar todas pelas sugestões?")) return;
+    names = Object.keys(values);
+  }
+  for (const name of names) {
+    form.elements[name].value = values[name];
+    autoFilled.set(name, values[name]);
+  }
+  syncPublicReplyCount();
 }
 
 function syncPublicReplyCount() {
@@ -891,6 +956,13 @@ $("#rule-form").elements.buttonTitle.addEventListener("input", (event) => {
 });
 $("#rule-form").elements.responseMode.addEventListener("change", syncResponseModeFields);
 $("#rule-form").elements.publicReplies.addEventListener("input", syncPublicReplyCount);
+$("#rule-form").elements.keyword.addEventListener("input", () => applyReplySuggestions());
+$("#rule-form").elements.followUpEnabled.addEventListener("change", () => applyReplySuggestions());
+$("#suggest-replies").addEventListener("click", () => {
+  if (!$("#rule-form").elements.keyword.value.trim()) { $("#form-error").textContent = "Digite a palavra-chave primeiro."; return; }
+  suggestionSeed += 1;
+  applyReplySuggestions({ force: true });
+});
 $("#rule-form").addEventListener("input", renderJourneyPreview);
 $("#rule-form").addEventListener("change", renderJourneyPreview);
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => $(`#${button.dataset.close}`).close()));

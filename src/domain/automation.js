@@ -92,6 +92,14 @@ export function createRule(input) {
     createdAt: new Date().toISOString() };
 }
 
+// {nome} vira o @ de quem comentou e {palavra} a palavra-chave da regra. Sem username conhecido,
+// o {nome} some junto com o espaço antes ("Oi {nome}!" → "Oi!") em vez de deixar o marcador cru.
+export function personalize(text, { username, keyword } = {}) {
+  let result = String(text ?? "");
+  result = username ? result.replace(/\{nome\}/gi, `@${String(username).replace(/^@/, "")}`) : result.replace(/[ \t]*\{nome\}/gi, "");
+  return result.replace(/\{palavra\}/gi, String(keyword ?? "").trim());
+}
+
 export function selectPublicReply(rule, sentCount = 0) {
   const replies = Array.isArray(rule.publicReplies) && rule.publicReplies.length ? rule.publicReplies : [rule.reply];
   return replies[Math.max(0, Number(sentCount) || 0) % replies.length];

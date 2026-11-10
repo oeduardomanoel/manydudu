@@ -108,3 +108,20 @@ test("falls back to a null username when the Meta API lookup fails", async () =>
 
   assert.equal(recorded[0].username, null);
 });
+
+test("fills {nome} and {palavra} in the private reply, the public reply and the stored delivery", async () => {
+  const calls = [];
+  let pending = null;
+  const rule = { id: "rule-1", name: "CRM", keyword: "crm", match: "contains", enabled: true, responseMode: "both",
+    reply: "Oi {nome}! Me responde SIM que eu te mando o {palavra}", publicReplies: ["{nome}, te mandei o {palavra} na DM"],
+    followUpEnabled: true, followUpText: "Aqui está o {palavra}, {nome} 👇", followUpUrl: "https://example.com" };
+  const store = {
+    claimEvent: async () => true, recordContactEvent: async () => {}, isContactPaused: async () => false, getContact: async () => null,
+    read: async () => ({ rules: [rule], activity: [] }),
+    setPendingDelivery: async (id, delivery) => { pending = delivery; }, log: async () => {}
+  };
+  const meta = { reply: async (_id, text, mode) => { calls.push(text); return mode === "private" ? { recipient_id: "p1" } : { id: "x" }; } };
+  await processComments([{ id: "c1", authorId: "p1", username: "ana.silva", text: "quero o CRM", mediaId: "m" }], store, meta);
+  assert.deepEqual(calls, ["Oi @ana.silva! Me responde SIM que eu te mando o crm", "@ana.silva, te mandei o crm na DM"]);
+  assert.equal(pending.text, "Aqui está o crm, @ana.silva 👇");
+});

@@ -210,3 +210,27 @@ nav button{display:flex;align-items:center}
 @media(max-width:900px){.nav-label{display:none}.nav-badge,.nav-dot{position:absolute;top:4px;right:4px;margin:0}nav button{position:relative;justify-content:center}}
 @media(max-width:580px){.kpi-grid{grid-template-columns:1fr 1fr;gap:10px}.kpi strong{font-size:24px}}
 nav{min-height:0;overflow-y:auto;margin-top:34px}
+.suggest-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-4px 0 16px;padding:10px 12px;border:1px dashed var(--strong);border-radius:10px;background:color-mix(in srgb,var(--cyan) 6%,transparent)}
+.suggest-bar span{color:var(--muted);font-size:10px;line-height:1.5}
+.suggest-bar b{color:var(--cyan);font:500 10px 'Martian Mono'}
+.suggest-bar .edit-rule{flex:none}
+.funnel-bars{display:grid;gap:12px;padding:4px 0 6px}
+.funnel-row{display:grid;grid-template-columns:170px 1fr 150px;align-items:center;gap:16px;font-size:12px}
+.funnel-row>span{color:var(--muted)}
+.funnel-bar{height:10px;border-radius:10px;background:var(--surface2);overflow:hidden}
+.funnel-bar i{display:block;height:100%;border-radius:10px;background:linear-gradient(90deg,var(--cyan),color-mix(in srgb,var(--cyan) 70%,#fff))}
+.funnel-row b{font:500 14px 'Martian Mono';text-align:right}
+.funnel-row em{display:block;color:var(--quiet);font:400 9px 'Martian Mono';font-style:normal}
+.feed-event{display:grid;grid-template-columns:32px 1fr auto;gap:11px;align-items:start;padding:9px 6px;border-radius:10px}
+.feed-event:hover{background:var(--surface2)}
+.feed-event p{margin:0;font-size:11px;line-height:1.45}
+.feed-event p b{font-weight:600}
+.feed-event small{display:block;margin-top:2px;color:var(--quiet);font-size:10px;line-height:1.4}
+.feed-event time{color:var(--quiet);font:9px 'Martian Mono';white-space:nowrap}
+.feed-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--surface2);color:var(--muted);font-size:13px}
+.feed-event.out .feed-icon{background:color-mix(in srgb,var(--cyan) 14%,transparent);color:var(--cyan)}
+.feed-event.ok .feed-icon{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
+.feed-event.wait .feed-icon{background:color-mix(in srgb,var(--yellow) 14%,transparent);color:var(--yellow)}
+.feed-event.bad .feed-icon{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+.feed-event.muted{opacity:.72}
+@media(max-width:680px){.funnel-row{grid-template-columns:1fr 90px}.funnel-bar{grid-column:1/-1;grid-row:2}}
