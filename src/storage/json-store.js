@@ -128,6 +128,13 @@ export class JsonStore {
   async listCampaigns() { const state = await this.read(); return state.campaigns ?? []; }
   async addLead(lead) { await this.update((state) => { state.leads ??= []; state.leads.unshift(lead); }); return lead; }
   async listLeads() { const state = await this.read(); return state.leads ?? []; }
+  async addCampaignVisits(counts) {
+    await this.update((state) => {
+      for (const campaign of state.campaigns ?? []) {
+        if (hasOwn(counts, campaign.slug)) campaign.visits = (Number(campaign.visits) || 0) + Number(counts[campaign.slug]);
+      }
+    });
+  }
   async addPost(post) { await this.update((state) => { state.posts ??= []; state.posts.unshift(post); }); return post; }
   async listPosts() { const state = await this.read(); return state.posts ?? []; }
   async getPost(id) { return (await this.listPosts()).find((post) => post.id === id) ?? null; }

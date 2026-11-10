@@ -59,7 +59,7 @@
     <header><div><p class="eyebrow">ENTREGA COM CAPTURA DE LEAD</p><h1>Campanhas<br><em>que capturam lead.</em></h1></div><button class="primary" id="new-campaign">＋ Nova campanha</button></header>
     <section class="media-section" id="campaigns">
       <div class="section-head"><div><p class="eyebrow">LINKS PÚBLICOS</p><h2>Suas campanhas</h2></div></div>
-      <div id="campaigns-list" class="rule-list"></div>
+      <div id="campaigns-list" class="campaign-grid"></div>
     </section>
     <section class="contacts-section" id="leads">
       <div class="section-head"><div><p class="eyebrow">CAPTURADOS PELAS CAMPANHAS</p><h2>Leads</h2></div>
@@ -209,8 +209,11 @@
             <label class="video-drop" id="video-drop">
               <input type="file" id="publish-file" accept="video/mp4,video/quicktime">
               <span class="video-drop-text" id="video-drop-text"><b>＋ Escolher vídeo</b><small>ou arraste aqui · MP4 ou MOV · vertical 9:16 · 3 s a 15 min · até 1 GB</small></span>
-              <video id="publish-video-preview" controls playsinline muted hidden></video>
+              <video id="publish-video-preview" playsinline muted loop hidden></video>
+              <span class="phone-tag" id="phone-tag" hidden>TRIAL · só pra quem não segue</span>
+              <span class="phone-overlay" id="phone-overlay" hidden><strong><i></i><span id="phone-handle">seuperfil</span> · Seguir</strong><span id="phone-caption"></span></span>
             </label>
+            <p class="phone-caption-note">Prévia: a legenda corta em 3 linhas como no app</p>
             <p class="publish-file-name" id="publish-file-name"></p>
           </div>
           <div class="publish-fields">
@@ -244,6 +247,7 @@
     </section>
     <section class="media-section" id="publish-queue">
       <div class="section-head"><div><p class="eyebrow">FILA</p><h2>Agendados e publicados</h2></div><button type="button" class="icon-btn" id="refresh-posts" title="Atualizar">↻</button></div>
+      <div class="week-strip" id="week-strip"></div>
       <div id="posts-list" class="rule-list"></div>
     </section>
     </div>

@@ -7,6 +7,7 @@ import { MetaClient } from "./meta/client.js";
 import { createStore } from "./storage/create-store.js";
 import { scheduleTokenRefresh, tokenFingerprint } from "./meta/token-refresh.js";
 import { createPostScheduler } from "./meta/reel-publisher.js";
+import { createVisitCounter } from "./domain/campaign-visits.js";
 
 // Without these, one unhandled rejection anywhere in the process (a bad webhook
 // payload, a flaky Meta API call outside a try/catch) kills the whole instance —
@@ -54,6 +55,10 @@ const config = { verifyToken: env.META_VERIFY_TOKEN || "", appSecret: env.META_A
   uploadsDir: env.UPLOADS_PATH || join(process.cwd(), "data", "uploads") };
 const scheduler = createPostScheduler({ store, meta, uploadsDir: config.uploadsDir });
 await scheduler.start();
+const visitCounter = createVisitCounter({ store });
+visitCounter.start();
+// deploy no Coolify manda SIGTERM: grava as visitas do último minuto antes de sair
+process.once("SIGTERM", () => { visitCounter.flush().finally(() => process.exit(0)); });
 if (!env.ADMIN_PASSWORD) {
   console.warn("AVISO: ADMIN_PASSWORD não definida — o login admin ficará bloqueado até configurar.");
   console.warn(`Configuração inicial: acesse http://SEU-ENDERECO/setup?token=${setupToken}`);
@@ -72,7 +77,7 @@ async function serveStatic(_request, response, pathname) {
   catch { response.writeHead(404); response.end("Not found"); }
 }
 
-const server = createServer(createApp({ store, meta, config, serveStatic, scheduler }));
+const server = createServer(createApp({ store, meta, config, serveStatic, scheduler, visitCounter }));
 // o padrão do Node (5 min por requisição) cortaria o envio de um vídeo grande numa conexão lenta
 server.requestTimeout = 60 * 60_000;
 server.listen(port, () => console.log(`ManyDudu em http://localhost:${port}`));

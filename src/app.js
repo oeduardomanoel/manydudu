@@ -114,7 +114,7 @@ function sendVideo(request, response, path, size, type) {
   createReadStream(path, { start, end }).pipe(response);
 }
 
-export function createApp({ store, meta, config, serveStatic, scheduler = null }) {
+export function createApp({ store, meta, config, serveStatic, scheduler = null, visitCounter = null }) {
   return async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     applySecurityHeaders(request, response);
@@ -125,7 +125,10 @@ export function createApp({ store, meta, config, serveStatic, scheduler = null }
         if (!campaign || !campaign.active) return html(response, 404, renderNotFound(await store.getSettings()));
         const slugs = readAccessSlugs(request, config.sessionSecret);
         const settings = await store.getSettings();
-        return html(response, 200, slugs.includes(campaign.slug) ? renderContentPage(campaign, settings) : renderGatePage(campaign, settings));
+        if (slugs.includes(campaign.slug)) return html(response, 200, renderContentPage(campaign, settings));
+        // só conta quem ainda não liberou — quem volta pra reler o conteúdo não é visita nova do formulário
+        visitCounter?.record(campaign.slug, request.headers["user-agent"]);
+        return html(response, 200, renderGatePage(campaign, settings));
       }
       if (url.pathname === "/setup" || url.pathname.startsWith("/api/setup/")) {
         if (!isSetupRequestAuthorized(request, url, config)) return html(response, 404, renderNotFound(await store.getSettings()));

@@ -335,12 +335,16 @@ function renderCampaigns() {
   const leadCounts = state.leads.reduce((counts, lead) => counts.set(lead.campaignSlug, (counts.get(lead.campaignSlug) || 0) + 1), new Map());
   $("#campaigns-list").innerHTML = state.campaigns.length ? state.campaigns.map((campaign) => {
     const leads = leadCounts.get(campaign.slug) || 0;
+    const visits = Number(campaign.visits) || 0;
+    // visitas só começaram a ser contadas agora: lead antigo sem visita registrada não pode virar "conversão de 100%+"
+    const conversion = visits >= leads && visits > 0 ? `${(leads / visits * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%` : "—";
     const slug = escapeHtml(campaign.slug);
-    return `<article class="campaign-row">
-    <div><h3>${escapeHtml(campaign.title)} <span class="campaign-status ${campaign.active ? "active" : "inactive"}">${campaign.active ? "ATIVA" : "PAUSADA"}</span></h3>
-    <p><a href="/c/${slug}" target="_blank" rel="noopener">${escapeHtml(campaignUrl(campaign.slug).replace(/^https?:\/\//, ""))}</a></p>
-    <p class="campaign-meta"><button type="button" class="link-btn" data-campaign-leads="${slug}">${leads} ${leads === 1 ? "lead" : "leads"}</button> · criada em ${escapeHtml(formatDate(campaign.createdAt))}</p></div>
-    <div class="rule-actions"><button class="edit-rule" data-copy-campaign="${slug}">Copiar link</button><button class="edit-rule" data-edit-campaign="${slug}">Editar</button><button class="icon-btn" data-delete-campaign="${slug}" title="Excluir">×</button></div>
+    return `<article class="campaign-card${campaign.active ? "" : " paused"}">
+    <div class="campaign-card-top"><div><h3>${escapeHtml(campaign.title)}</h3>
+    <a href="/c/${slug}" target="_blank" rel="noopener">${escapeHtml(campaignUrl(campaign.slug).replace(/^https?:\/\//, ""))}</a></div>
+    <span class="campaign-status ${campaign.active ? "active" : "inactive"}">${campaign.active ? "ATIVA" : "PAUSADA"}</span></div>
+    <div class="campaign-stats"><div><span>Visitas</span><b>${visits.toLocaleString("pt-BR")}</b></div><div><span>Leads</span><b><button type="button" class="link-btn" data-campaign-leads="${slug}" title="Ver os leads dessa campanha">${leads}</button></b></div><div><span>Conversão</span><b class="accent">${conversion}</b></div></div>
+    <div class="campaign-card-actions"><button class="edit-rule" data-copy-campaign="${slug}">Copiar link</button><button class="edit-rule" data-edit-campaign="${slug}">Editar</button><button class="icon-btn" data-delete-campaign="${slug}" title="Excluir">×</button><small>criada em ${escapeHtml(formatDate(campaign.createdAt))}</small></div>
   </article>`;
   }).join("") : '<p class="empty">Nenhuma campanha ainda.<br>Crie uma para entregar conteúdo após capturar o lead.</p>';
   renderLeadsFilter();
@@ -1180,8 +1184,11 @@ function setPublishFile(file) {
   const video = $("#publish-video-preview");
   video.src = publishPreviewUrl;
   video.hidden = false;
+  video.play().catch(() => {});
+  $("#phone-overlay").hidden = false;
   $("#video-drop").classList.add("has-video");
   $("#publish-file-name").textContent = `${file.name} · ${(file.size / 1024 ** 2).toFixed(1)} MB · trocar vídeo`;
+  syncPublishForm();
 }
 
 function syncPublishForm() {
@@ -1200,6 +1207,10 @@ function syncPublishForm() {
   const counter = $("#caption-counter");
   counter.textContent = `${caption.length} / 2200 · ${hashtags} ${hashtags === 1 ? "hashtag" : "hashtags"}`;
   counter.classList.toggle("over", hashtags > 30);
+  // prévia no "celular": legenda por cima do vídeo, hashtags destacadas, selo de Trial
+  $("#phone-tag").hidden = !trial || !publishFile;
+  $("#phone-handle").textContent = state.health?.token?.username || state.settings.brandHandle || "seuperfil";
+  $("#phone-caption").innerHTML = escapeHtml(caption || "Sua legenda aparece aqui…").replace(/(#[^\s#]+)/g, "<em>$1</em>").replace(/\n/g, "<br>");
 }
 
 // fetch não informa progresso de envio — XMLHttpRequest sim, e um vídeo grande demora
@@ -1252,6 +1263,17 @@ function renderPosts() {
     const order = { publishing: 0, scheduled: 1, failed: 2, published: 3 };
     return (order[a.status] - order[b.status]) || (a.status === "scheduled" ? Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt) : Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
   });
+  // próximos 7 dias: um ponto por Reel agendado em cada dia (publicado conta no dia em que saiu)
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  $("#week-strip").innerHTML = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(today); day.setDate(today.getDate() + index);
+    const same = (iso) => iso && new Date(iso).toDateString() === day.toDateString();
+    const scheduledCount = posts.filter((post) => post.status === "scheduled" && same(post.scheduledAt)).length;
+    const publishedCount = posts.filter((post) => post.status === "published" && same(post.publishedAt)).length;
+    const label = day.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "").toUpperCase();
+    const title = [scheduledCount && `${scheduledCount} agendado${scheduledCount > 1 ? "s" : ""}`, publishedCount && `${publishedCount} publicado${publishedCount > 1 ? "s" : ""}`].filter(Boolean).join(" · ") || "nada nesse dia";
+    return `<div class="week-day${index === 0 ? " today" : ""}" title="${title}"><span>${index === 0 ? "HOJE" : label}</span><b>${day.getDate()}</b><i>${"<em></em>".repeat(Math.min(scheduledCount, 3))}${"<em class=\"done\"></em>".repeat(Math.min(publishedCount, 3))}</i></div>`;
+  }).join("");
   $("#posts-list").innerHTML = posts.length ? posts.map((post) => {
     const [label, tone] = POST_STATUS[post.status] || [post.status, ""];
     const kind = post.kind === "trial" ? `Trial Reels · ${post.graduationStrategy === "SS_PERFORMANCE" ? "promove sozinho" : "promoção manual"}` : `Reels${post.shareToFeed ? " · feed" : ""}`;
@@ -1278,7 +1300,11 @@ $("#video-drop").addEventListener("dragover", (event) => { event.preventDefault(
 $("#video-drop").addEventListener("dragleave", (event) => event.currentTarget.classList.remove("dragging"));
 $("#video-drop").addEventListener("drop", (event) => { event.preventDefault(); event.currentTarget.classList.remove("dragging"); setPublishFile(event.dataTransfer.files[0]); });
 // o <video> com controles fica dentro do label: clicar nos controles não pode abrir o seletor de arquivo
-$("#publish-video-preview").addEventListener("click", (event) => event.preventDefault());
+$("#publish-video-preview").addEventListener("click", (event) => {
+  event.preventDefault();
+  const video = event.currentTarget;
+  if (video.paused) video.play().catch(() => {}); else video.pause();
+});
 $("#publish-file-name").addEventListener("click", () => $("#publish-file").click());
 $("#publish-form").addEventListener("input", syncPublishForm);
 $("#publish-form").addEventListener("change", syncPublishForm);
@@ -1305,6 +1331,7 @@ $("#publish-form").addEventListener("submit", async (event) => {
     $("#publish-video-preview").hidden = true;
     $("#publish-video-preview").removeAttribute("src");
     $("#video-drop").classList.remove("has-video");
+    $("#phone-overlay").hidden = true;
     $("#publish-file-name").textContent = "";
     syncPublishForm();
     setPublishProgress(null);
