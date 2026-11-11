@@ -72,20 +72,21 @@ export const monthStart = (now = Date.now()) => `${dayKey(now).slice(0, 8)}01`;
 
 // Mesmo trecho do mês anterior (do dia 1 até o mesmo dia), pra comparar "no mesmo ponto".
 // Só devolve se o resumo já cobria aquele período — senão a comparação mostraria queda falsa.
-export function previousMonthSpan(stats = {}, now = Date.now()) {
+export function previousMonthSpan(completeSince, now = Date.now()) {
   const [y, m, d] = dayKey(now).split("-").map(Number);
   const lastDay = new Date(Date.UTC(y, m - 1, 0)).getUTCDate();
   const from = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);
   const to = new Date(Date.UTC(y, m - 2, Math.min(d, lastDay))).toISOString().slice(0, 10);
-  const covered = Object.keys(stats).some((key) => key <= from);
-  return covered ? { from, to } : null;
+  return completeSince && completeSince <= from ? { from, to } : null;
 }
 
 export function overview(state = {}, { range = "14d", ruleId = null, now = Date.now() } = {}) {
   const stats = state.dailyStats ?? {};
   const today = dayKey(now);
   const from = monthStart(now);
-  const previous = previousMonthSpan(stats, now);
+  // contagem completa só a partir de dailyStatsSince; sem a data (estado antigo), vale o dia mais antigo
+  const completeSince = state.dailyStatsSince ?? Object.keys(stats).sort()[0] ?? null;
+  const previous = previousMonthSpan(completeSince, now);
   const settings = state.settings ?? {};
   const rules = state.rules ?? [];
   const fourteen = addDays(today, -13);
@@ -106,7 +107,8 @@ export function overview(state = {}, { range = "14d", ruleId = null, now = Date.
     goals: { dmDaily: Number(settings.dmDailyGoal) || 0, leadMonthly: Number(settings.leadMonthlyGoal) || 0 },
     range,
     series: buildSeries(stats, { range, now, ruleId }),
-    trackedSince: Object.keys(stats).sort()[0] ?? null,
+    trackedSince: completeSince,
+    monthComplete: Boolean(completeSince && completeSince <= from),
     rules: rules.map((rule) => ({ id: rule.id, name: rule.name, keyword: rule.keyword })),
     ranking,
     rankingSince: fourteen,

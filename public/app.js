@@ -1249,7 +1249,7 @@ function renderOverview() {
   const change = month.previousSent ? Math.round((month.sent - month.previousSent) / month.previousSent * 100) : null;
   $("#ov-kpi-month").innerHTML = `<span class="ov-kpi-label">${chip("dm")}DMs enviadas · ${monthName}</span>
     <strong id="ov-month-value">0</strong>
-    <span class="ov-meta-line">${change === null ? "<span class=\"ov-delta\">mês em curso</span>" : `<span class="ov-delta">${change >= 0 ? "↑" : "↓"} ${Math.abs(change)}%</span>vs o mês passado no mesmo ponto`}</span>
+    <span class="ov-meta-line">${change === null ? (data.monthComplete ? '<span class="ov-delta">mês em curso</span>' : `<span class="ov-delta">parcial</span>contagem completa desde ${shortDate(data.trackedSince)}`) :`<span class="ov-delta">${change >= 0 ? "↑" : "↓"} ${Math.abs(change)}%</span>vs o mês passado no mesmo ponto`}</span>
     <div class="ov-progress"><i id="ov-month-progress"></i></div>
     <div class="ov-progress-labels">${monthGoal ? `<span>${Math.round(month.sent / monthGoal * 100)}% da meta</span><span>meta ${fmt(monthGoal)}</span>` : `<span>dia ${month.day} de ${month.daysInMonth}</span><button type="button" data-go-view="health" data-scroll-to="goals-section">definir meta</button>`}</div>`;
   countUp($("#ov-month-value"), month.sent);
@@ -1301,7 +1301,7 @@ function renderOverviewChart() {
     <div class="ov-filters">${filters.join("")}</div>`;
   countUp($("#ov-total"), total);
   const tracked = data.trackedSince;
-  $("#ov-legend-note").textContent = tracked && tracked > points[0].day ? `o resumo diário começou em ${shortDate(tracked)} — antes disso fica zerado` : "passe o mouse num ponto pra ver os detalhes";
+  $("#ov-legend-note").textContent = tracked && tracked > points[0].day ? `contagem completa desde ${shortDate(tracked)} — antes disso os números são parciais` : "passe o mouse num ponto pra ver os detalhes";
 
   const svg = $("#ov-chart");
   if (!points.some((point) => point.value) && !target) {

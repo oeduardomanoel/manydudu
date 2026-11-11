@@ -49,9 +49,18 @@ test("buildSeries fills missing days with zero and filters by automation", () =>
   assert.equal(weeks.at(-1).value, 3);
 });
 
-test("previous-month comparison only appears when the summary reaches back that far", () => {
-  assert.equal(previousMonthSpan({ "2026-11-02": {} }, NOW), null);
-  assert.deepEqual(previousMonthSpan({ "2026-09-30": {} }, NOW), { from: "2026-10-01", to: "2026-10-11" });
+test("previous-month comparison only appears when the complete count reaches back that far", () => {
+  assert.equal(previousMonthSpan("2026-11-02", NOW), null);
+  assert.equal(previousMonthSpan(null, NOW), null);
+  assert.deepEqual(previousMonthSpan("2026-09-30", NOW), { from: "2026-10-01", to: "2026-10-11" });
+});
+
+test("data backfilled from the capped log before dailyStatsSince does not count as complete", () => {
+  const state = { dailyStats: backfillDailyStats([{ status: "sent", at: "2026-09-28T15:00:00Z" }, { status: "sent", at: at(0) }]), dailyStatsSince: "2026-11-11" };
+  const result = overview(state, { now: NOW });
+  assert.equal(result.trackedSince, "2026-11-11");
+  assert.equal(result.monthComplete, false);
+  assert.equal(result.month.previousSent, null);
 });
 
 test("overview gathers month totals, goals, series and a ranking by automation", () => {
@@ -82,8 +91,9 @@ test("JsonStore.log feeds the daily summary in the same write, and ensureDailySt
     await store.ensureDailyStats();
     await store.ensureDailyStats();
     await store.log({ status: "sent", ruleId: "r1", at: new Date().toISOString() });
-    const { dailyStats } = await store.read();
+    const { dailyStats, dailyStatsSince } = await store.read();
     assert.equal(dailyStats[dayKey()].sent, 2);
+    assert.equal(dailyStatsSince, dayKey());
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { AppError } from "../util/errors.js";
 import { PIPELINE_STAGES } from "../domain/pipeline.js";
-import { backfillDailyStats, recordDailyEvent } from "../domain/daily-stats.js";
+import { backfillDailyStats, dayKey, recordDailyEvent } from "../domain/daily-stats.js";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ACTIVITY_LIMIT = 500;
@@ -49,10 +49,12 @@ export class JsonStore {
       recordDailyEvent(state.dailyStats, item);
     });
   }
+  // dailyStatsSince = dia em que a contagem passou a ser completa. O que veio do log antes disso
+  // é parcial (o log só guarda os eventos mais recentes) e o painel avisa isso.
   async ensureDailyStats() {
     await this.update((state) => {
-      if (state.dailyStats && Object.keys(state.dailyStats).length) return;
-      state.dailyStats = backfillDailyStats(state.activity ?? []);
+      if (!state.dailyStats || !Object.keys(state.dailyStats).length) state.dailyStats = backfillDailyStats(state.activity ?? []);
+      state.dailyStatsSince ??= dayKey();
     });
   }
   async setPendingDelivery(recipientId, delivery) {
