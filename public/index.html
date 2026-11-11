@@ -2,36 +2,80 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title id="page-title">ManyDudu · Automação que conversa</title><link rel="stylesheet" href="/styles.css?v=4c370c8"><link rel="stylesheet" id="theme-link" href="/theme.css?v=4c370c8">
+  <title id="page-title">ManyDudu · Automação que conversa</title><link rel="stylesheet" href="/styles.css?v=4c370c8"><link rel="stylesheet" id="theme-link" href="/theme.css?v=4c370c8"><link rel="stylesheet" href="/overview.css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;0,800;0,900;1,800&family=Work+Sans:wght@400;500;600;700;800&display=swap">
 </head>
 <body>
   <div class="grain"></div>
   <aside>
-    <a class="brand" href="/" id="brand-link"><span id="brand-mark" class="brand-mark">MD</span> <span id="brand-name">manydudu</span></a>
+    <div class="brand-row"><a class="brand" href="/" id="brand-link"><span id="brand-mark" class="brand-mark">MD</span><span class="brand-text"><span id="brand-name">manydudu</span><small id="brand-handle"></small></span></a><button type="button" class="side-collapse" id="side-collapse" title="Recolher menu"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button></div>
+    <button type="button" class="side-new" id="side-new-rule"><span class="side-new-plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span class="side-new-label">Nova automação</span><kbd>N</kbd></button>
     <nav>
       <p class="nav-label">Instagram</p>
-      <button class="active" data-view="dashboard" data-scroll="top">◈ <span>Visão geral</span></button><button data-view="dashboard" data-scroll="contents">▣ <span>Conteúdos</span></button><button data-view="dashboard" data-scroll="automations">⌁ <span>Automações</span></button><button data-view="dashboard" data-scroll="activity-panel">◎ <span>Atividade</span></button><button data-view="inbox" data-scroll="top">✉ <span>DM</span></button><button data-view="publish" data-scroll="publish">▶ <span>Publicar</span><b class="nav-badge" id="nav-badge-posts" hidden></b></button><button data-view="carousel" data-scroll="carousel-section">▤ <span>Carrossel</span></button>
+      <button class="active" data-view="dashboard" data-scroll="top"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v8a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Visão geral</span></button><button data-view="dashboard" data-scroll="automations"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><span>Automações</span><b class="nav-badge muted" id="nav-badge-rules" hidden></b></button><button data-view="dashboard" data-scroll="contents"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Conteúdos</span></button><button data-view="inbox" data-scroll="top"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Direct</span></button><button data-view="publish" data-scroll="publish"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="m10.5 9 4 3-4 3z"/></svg><span>Publicar</span><b class="nav-badge" id="nav-badge-posts" hidden></b></button><button data-view="carousel" data-scroll="carousel-section"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M20 7v10"/></svg><span>Carrossel</span></button>
       <p class="nav-label">Captura</p>
-      <button data-view="campaigns" data-scroll="campaigns">⇩ <span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads">☰ <span>Leads</span><b class="nav-badge" id="nav-badge-leads" hidden></b></button><button data-view="pipeline" data-scroll="pipeline">◫ <span>Pipeline</span></button>
+      <button data-view="campaigns" data-scroll="campaigns"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h10v6H4z"/></svg><span>Campanhas</span></button><button data-view="campaigns" data-scroll="leads"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M17 11h5M19.5 8.5v5"/></svg><span>Leads</span><b class="nav-badge" id="nav-badge-leads" hidden></b></button><button data-view="pipeline" data-scroll="pipeline"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg><span>Pipeline</span></button>
       <p class="nav-label">Sistema</p>
-      <button data-view="health" data-scroll="health">♡ <span>Saúde</span><i class="nav-dot" id="nav-health-dot" hidden></i></button><button data-view="audit" data-scroll="audit">☷ <span>Auditoria</span></button>
+      <button data-view="health" data-scroll="health"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Saúde e ajustes</span><i class="nav-dot" id="nav-health-dot" hidden></i></button><button data-view="audit" data-scroll="audit"><svg viewBox="0 0 24 24"><path d="M9 4h10M9 12h10M9 20h10M4 4h.01M4 12h.01M4 20h.01"/></svg><span>Auditoria</span></button>
     </nav>
-    <div class="account"><div class="avatar">IG</div><div><strong>Meu Instagram</strong><small id="connection">verificando...</small></div><button type="button" id="logout" class="icon-btn" title="Sair" style="margin-left:auto">⏻</button></div>
+    <div class="today-card" title="DMs enviadas hoje contra a meta do dia">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" class="ring-bg"/><circle cx="20" cy="20" r="16" class="ring-fg" id="today-ring"/></svg>
+      <div><small>Hoje até agora</small><strong id="today-summary">—</strong></div>
+    </div>
   </aside>
   <main id="top">
+    <div class="topbar">
+      <button type="button" class="top-search" id="open-cmdk"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Buscar contato, automação, tela…</span><kbd>Ctrl K</kbd></button>
+      <div class="top-right">
+        <span class="top-date" id="top-date"></span>
+        <div class="top-pop-wrap">
+          <button type="button" class="top-icon" id="bell" title="Avisos"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><b id="bell-count" hidden></b></button>
+          <div class="top-pop" id="bell-pop"><h4>Avisos</h4><div id="bell-list"><p class="top-pop-empty">Nada pedindo sua atenção agora.</p></div></div>
+        </div>
+        <div class="top-pop-wrap">
+          <button type="button" class="top-user" id="user-chip"><span class="top-avatar" id="top-avatar">IG</span><span class="top-user-text"><strong id="top-user-name">Meu Instagram</strong><small id="connection">verificando...</small></span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="top-pop narrow" id="user-pop"><button type="button" class="top-pop-item" data-go-view="health">Saúde e ajustes</button><button type="button" class="top-pop-item" id="logout">Sair do painel</button></div>
+        </div>
+      </div>
+    </div>
     <div id="view-dashboard" class="view">
-    <header><div><p class="eyebrow">ESTÚDIO DE CONVERSAS</p><h1>Seus comentários,<br><em>em movimento.</em></h1></div><div style="display:flex;gap:8px"><button type="button" class="icon-btn" id="import-package" title="Importar pacote de automação">⇧ Importar</button><input type="file" id="import-package-input" accept="application/json" hidden><button class="primary" id="new-rule">＋ Nova automação</button></div></header>
+    <section class="ov-hero">
+      <div><p class="ov-greeting" id="ov-greeting">Olá</p><h1 class="ov-title">Seu Instagram <span>hoje</span></h1><div class="ov-summary" id="ov-summary"></div></div>
+      <div class="ov-actions"><button type="button" class="ov-btn" id="import-package" title="Importar pacote de automação"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>Importar</button><input type="file" id="import-package-input" accept="application/json" hidden><button type="button" class="ov-btn" id="ov-report"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Relatório</button><button class="ov-btn primary-grad" id="new-rule"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nova automação</button></div>
+    </section>
     <section class="onboarding-card" id="onboarding-card" hidden>
       <div><p class="eyebrow">PRIMEIROS PASSOS</p><h2>Sua primeira automação em 3 passos</h2>
       <p>1. Escolha um Reel na biblioteca abaixo (ou deixe em branco pra valer pra todos). 2. Clique em "Nova automação" e defina a palavra-chave que a pessoa vai comentar. 3. Escreva a resposta e salve — pronto, já está no ar.</p></div>
       <button type="button" class="primary compact" id="onboarding-dismiss">Entendi →</button>
     </section>
-    <div class="status-strip" id="status-strip" aria-live="polite"></div>
-    <section class="kpis">
-      <div class="kpis-head"><p class="eyebrow">ÚLTIMOS 7 DIAS</p><span id="kpis-coverage"></span></div>
-      <div class="kpi-grid" id="kpi-grid"><p class="empty">Calculando…</p></div>
-    </section>    <section class="media-section" id="contents">
+    <div class="ov-layout">
+      <div class="ov-col">
+        <div class="ov-kpis">
+          <article class="ov-card ov-kpi ov-kpi-hero" id="ov-kpi-month"></article>
+          <div class="ov-kpi-grid" id="kpi-grid"></div>
+        </div>
+        <p class="ov-coverage" id="kpis-coverage"></p>
+        <article class="ov-card" id="ov-chart-card">
+          <div class="ov-chart-head">
+            <div><h2>DMs enviadas <span id="ov-chart-title-goal">contra a meta</span></h2><p id="ov-chart-sub">Toda automação — laranja quando o dia bateu a meta</p></div>
+            <div class="ov-seg" id="ov-range"><span class="ov-seg-thumb"></span><button type="button" class="on" data-range="14d">14 dias</button><button type="button" data-range="30d">30 dias</button><button type="button" data-range="13w">13 semanas</button></div>
+          </div>
+          <div class="ov-chart-stats" id="ov-chart-stats"></div>
+          <div class="ov-chart-wrap" id="ov-chart-wrap"><svg id="ov-chart" viewBox="0 0 900 280" preserveAspectRatio="none" role="img" aria-label="DMs enviadas por dia"></svg><div class="ov-tip" id="ov-tip"></div></div>
+          <div class="ov-legend"><span><i class="hit"></i>bateu a meta</span><span><i class="miss"></i>abaixo da meta</span><span><i class="now"></i>período atual</span><span class="ov-legend-note" id="ov-legend-note">passe o mouse num ponto pra ver os detalhes</span></div>
+        </article>
+        <div class="ov-row">
+          <article class="ov-card" id="activity-panel"><div class="ov-card-head"><h2>Acontecendo agora</h2><span class="ov-live">AO VIVO</span></div><div id="activity" class="ov-feed"></div></article>
+          <article class="ov-card"><div class="ov-card-head"><h2>Automações que mais rendem</h2><span class="ov-card-note">DMs nos últimos 14 dias</span></div><div class="ov-rank" id="ov-rank"><p class="empty">Calculando…</p></div></article>
+        </div>
+      </div>
+      <div class="ov-col ov-right">
+        <article class="ov-card" id="ov-queue"></article>
+        <article class="ov-card" id="ov-goal"></article>
+        <article class="ov-card" id="ov-health"><div class="ov-card-head"><h2>Saúde do sistema</h2><button type="button" class="ov-round" data-go-view="health" title="Abrir Saúde e ajustes"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></svg></button></div><div id="status-strip" class="ov-health"></div></article>
+      </div>
+    </div>
+    <section class="media-section" id="contents">
       <div class="section-head"><div><p class="eyebrow">BIBLIOTECA DO INSTAGRAM</p><h2>Escolha onde a conversa começa.</h2></div><div class="filters"><button class="filter active" data-filter="REELS">Reels</button><button class="filter" data-filter="ALL">Todos</button><button class="icon-btn refresh" id="refresh-media" title="Atualizar conteúdos">↻</button></div></div>
       <div id="media-grid" class="media-grid"><div class="media-loading">Buscando seus conteúdos no Instagram…</div></div>
     </section>
@@ -52,7 +96,6 @@
     </section>
     <section class="content-grid">
       <div class="panel" id="automations"><div class="panel-head"><div><p class="eyebrow">FLUXOS</p><h2>Automações</h2></div><span id="rule-total">0 regras</span></div><div id="rules" class="rule-list"></div></div>
-      <div class="panel activity" id="activity-panel"><div class="panel-head"><div><p class="eyebrow">AO VIVO</p><h2>Atividade</h2></div><span class="live">● conectado</span></div><div id="activity"></div></div>
     </section>
     </div>
     <div id="view-campaigns" class="view" hidden>
@@ -110,6 +153,16 @@
         <button type="button" class="icon-btn" id="webhook-test">Testar envio</button>
       </form>
       <p class="form-error" id="webhook-status" role="alert" style="text-align:left;margin-top:8px"></p>
+    </section>
+    <section class="media-section" id="goals-section">
+      <div class="section-head"><div><p class="eyebrow">VISÃO GERAL</p><h2>Metas</h2></div></div>
+      <p class="hint">Aparecem no gráfico de DMs (linha tracejada) e no medidor de leads do mês. Deixe em branco pra não usar meta.</p>
+      <form id="goals-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <label style="flex:1;min-width:180px;margin:0">DMs por dia<input name="dmDailyGoal" type="number" min="0" max="100000" step="1" placeholder="ex.: 300"></label>
+        <label style="flex:1;min-width:180px;margin:0">Leads por mês<input name="leadMonthlyGoal" type="number" min="0" max="1000000" step="1" placeholder="ex.: 80"></label>
+        <button class="primary" type="submit">Salvar metas</button>
+      </form>
+      <p class="hint" id="goals-status" style="margin-top:8px"></p>
     </section>
     <section class="media-section" id="capi-section">
       <div class="section-head"><div><p class="eyebrow">ALIMENTE SEU PIXEL</p><h2>Meta Pixel &amp; Conversions API</h2></div></div>
@@ -243,7 +296,7 @@
                   <label>Mensagem de entrega<textarea name="autoFollowUpText" rows="2" maxlength="900"></textarea></label>
                   <label class="follow-check"><input type="checkbox" name="autoRequireFollow"><span><strong>Exigir que siga o perfil antes do link</strong><small>Usa o @ configurado em Marca.</small></span></label>
                 </div>
-                <div class="suggest-bar"><span><b>{nome}</b> vira o @ de quem comentou. Sugestões montadas a partir da palavra-chave — o que você editar fica.</span><button type="button" class="edit-rule" id="publish-suggest">✦ Gerar outras</button></div>
+                <div class="suggest-bar"><span><b>{nome}</b> vira o @ de quem comentou. Sugestões montadas a partir da palavra-chave — o que você editar fica.</span><button type="button" class="edit-rule" id="publish-suggest">Gerar outras</button></div>
               </div>
             </div>
             <div class="field-block"><span class="field-title">Quando</span>
@@ -279,7 +332,7 @@
       <label><span>Respostas públicas alternativas</span><textarea name="publicReplies" rows="6" placeholder="Te chamei no direct, dá uma olhadinha ✨&#10;Acabei de enviar para você. Confere suas solicitações!&#10;Prontinho! O material foi para o seu direct." maxlength="10009"></textarea></label>
       <div class="field-hint"><span>Uma resposta por linha. O ManyDudu faz um rodízio entre elas.</span><strong id="public-reply-count">0/10</strong></div>
     </div>
-    <div class="suggest-bar"><span><b>{nome}</b> vira o @ de quem comentou. As sugestões são preenchidas a partir da palavra-chave e não apagam o que você escreveu.</span><button type="button" class="edit-rule" id="suggest-replies">✦ Gerar outras</button></div>
+    <div class="suggest-bar"><span><b>{nome}</b> vira o @ de quem comentou. As sugestões são preenchidas a partir da palavra-chave e não apagam o que você escreveu.</span><button type="button" class="edit-rule" id="suggest-replies">Gerar outras</button></div>
     <label class="delivery-toggle"><input type="checkbox" name="followUpEnabled"><span><strong>Entregar conteúdo após a resposta</strong><small>A pessoa responde sua primeira DM e recebe o link automaticamente.</small></span><i></i></label>
     <div class="delivery-fields" id="delivery-fields" hidden>
       <div class="flow-line"><span>1</span><p><strong>Primeira DM</strong> Use a resposta acima para pedir uma interação. Ex.: “Responda EU QUERO”.</p></div>
@@ -369,5 +422,11 @@
     </form>
   </dialog>
   <dialog id="media-dialog" class="media-dialog"><div class="media-detail"><button type="button" class="close floating" data-close="media-dialog">×</button><div class="media-preview" id="detail-preview"></div><div class="comments-column"><div class="comments-head"><div><p class="eyebrow">CONVERSA NO CONTEÚDO</p><h2 id="detail-title">Comentários</h2></div><button class="primary compact" id="automate-media">＋ Automatizar</button></div><div id="detail-comments" class="comments-list"></div></div></div></dialog>
+  <div class="cmdk" id="cmdk" hidden>
+    <div class="cmdk-box" role="dialog" aria-label="Buscar">
+      <div class="cmdk-input"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="cmdk-q" placeholder="O que você quer fazer?" autocomplete="off"><kbd>Esc</kbd></div>
+      <div class="cmdk-list" id="cmdk-list"></div>
+    </div>
+  </div>
   <script type="module" src="/app.js"></script>
 </body></html>

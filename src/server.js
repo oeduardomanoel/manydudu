@@ -19,6 +19,8 @@ const env = process.env;
 const port = Number(env.PORT || 3000);
 const store = createStore({ env });
 await store.initialize();
+// primeira subida com o resumo diário: preenche com o que o log de atividade ainda tem
+await store.ensureDailyStats().catch((error) => console.error(`Falha ao montar o resumo diário: ${error.message}`));
 const meta = new MetaClient({ accessToken: env.META_ACCESS_TOKEN, instagramAccountId: env.INSTAGRAM_ACCOUNT_ID,
   graphVersion: env.META_GRAPH_VERSION || "v23.0", minWriteIntervalMs: Number(env.META_MIN_WRITE_INTERVAL_MS || 1500) });
 

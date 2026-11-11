@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { AppError } from "../util/errors.js";
 import { PIPELINE_STAGES } from "../domain/pipeline.js";
+import { backfillDailyStats, recordDailyEvent } from "../domain/daily-stats.js";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ACTIVITY_LIMIT = 500;
@@ -39,7 +40,21 @@ export class JsonStore {
   }
   async deleteRule(id) { await this.update((state) => { state.rules = state.rules.filter((rule) => rule.id !== id); }); }
   async toggleRule(id) { await this.update((state) => { const rule = state.rules.find((item) => item.id === id); if (rule) rule.enabled = !rule.enabled; }); }
-  async log(item) { await this.update((state) => { state.activity.unshift(item); state.activity = state.activity.slice(0, ACTIVITY_LIMIT); }); }
+  async log(item) {
+    await this.update((state) => {
+      state.activity.unshift(item);
+      state.activity = state.activity.slice(0, ACTIVITY_LIMIT);
+      // mesma gravação do log: o resumo diário não custa uma escrita a mais
+      state.dailyStats ??= {};
+      recordDailyEvent(state.dailyStats, item);
+    });
+  }
+  async ensureDailyStats() {
+    await this.update((state) => {
+      if (state.dailyStats && Object.keys(state.dailyStats).length) return;
+      state.dailyStats = backfillDailyStats(state.activity ?? []);
+    });
+  }
   async setPendingDelivery(recipientId, delivery) {
     await this.update((state) => { state.pendingDeliveries ??= {}; state.pendingDeliveries[recipientId] = delivery; });
   }

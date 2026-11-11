@@ -108,10 +108,10 @@ function describeEvent(event) {
     case "waiting_follow": return ["wait", "◷", `${who} ainda não segue o perfil`, "pedido pra seguir enviado · aguardando"];
     case "public_failed": return ["bad", "!", `A resposta pública pra ${who} falhou`, event.error ? escapeHtml(truncate(event.error, 90)) : "a DM foi enviada normalmente"];
     case "failed": return ["bad", "!", `Falha ao responder ${who}`, escapeHtml(truncate(event.error || event.text || "", 90))];
-    case "login_failed": return ["bad", "⚿", "Tentativa de login no painel recusada", event.user ? `usuário “${escapeHtml(event.user)}”` : ""];
+    case "login_failed": return ["bad", "!", "Tentativa de login no painel recusada", event.user ? `usuário “${escapeHtml(event.user)}”` : ""];
     case "ignored":
       if (event.reason === "fatigue_guard") return ["muted", "↺", `Não reenviei pra ${who}`, "já recebeu essa mensagem nas últimas 24 h"];
-      if (event.reason === "human_takeover") return ["muted", "✋", `Conversa com ${who} está com você`, "automação pausada pra esse contato"];
+      if (event.reason === "human_takeover") return ["muted", "‖", `Conversa com ${who} está com você`, "automação pausada pra esse contato"];
       return ["muted", "·", `${who} ${said || "comentou"}`, "nenhuma automação bateu com esse comentário"];
     default: return ["muted", "·", `${who}: ${escapeHtml(event.text || event.status)}`, ""];
   }
@@ -121,10 +121,20 @@ function renderActivity(activity) {
   // as respostas públicas da própria conta voltam pelo webhook como comentário "ignorado" — é só ruído aqui
   const ownHandle = (state.health?.token?.username || state.settings.brandHandle || "").toLowerCase();
   const events = activity.filter((event) => !(event.status === "ignored" && ownHandle && String(event.username || "").toLowerCase() === ownHandle));
-  $("#activity").innerHTML = events.length ? events.slice(0, 10).map((event) => {
+  $("#activity").innerHTML = events.length ? events.slice(0, 7).map((event, index) => {
     const [tone, icon, title, detail] = describeEvent(event);
-    return `<article class="feed-event ${tone}"><span class="feed-icon">${icon}</span><div><p>${title}</p>${detail ? `<small>${detail}</small>` : ""}</div><time title="${escapeHtml(new Date(event.at).toLocaleString("pt-BR"))}">${relativeTime(event.at).replace(/^há /, "")}</time></article>`;
+    const name = String(event.username || event.user || "?").replace(/^@/, "");
+    const initials = name.replace(/[^a-zà-ú0-9]/gi, "").slice(0, 2).toUpperCase() || "?";
+    return `<article class="feed-event ${tone}" style="animation-delay:${index * 40}ms"><span class="feed-face" style="background:${faceGradient(name)}">${escapeHtml(initials)}<b>${icon}</b></span><div><p>${title}</p>${detail ? `<small>${detail}</small>` : ""}</div><time title="${escapeHtml(new Date(event.at).toLocaleString("pt-BR"))}">${relativeTime(event.at).replace(/^há /, "")}</time></article>`;
   }).join("") : '<p class="empty">Os comentários processados aparecerão aqui.</p>';
+}
+
+// cor estável por pessoa (mesmo @ = mesma cor), pra a lista não virar um bloco só
+function faceGradient(name) {
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const hue = hash % 360;
+  return `linear-gradient(145deg,hsl(${hue} 70% 58%),hsl(${(hue + 30) % 360} 65% 26%))`;
 }
 
 async function loadMedia() {
@@ -163,33 +173,51 @@ async function loadAnalytics() {
   $("#rule-metrics").innerHTML = analytics.rules.length ? analytics.rules.map((rule) => `<article><div><strong>${escapeHtml(rule.name)}</strong><small>${rule.enabled ? "ativa" : "pausada"}</small></div><span>${rule.captured} capturas</span><span>${rule.replied} respostas</span><b>${rule.deliveryRate}%</b></article>`).join("") : '<p class="empty">Crie uma automação para começar a medir o funil.</p>';
 }
 
-function sparkline(series, hot) {
+const ICONS = {
+  dm: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  reply: '<path d="M9 17H5l-2 3V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5"/><path d="m14 18 2 2 5-5"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  lead: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M17 11h5M19.5 8.5v5"/>',
+  reel: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="m10.5 9 4 3-4 3z"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>',
+};
+const chip = (name) => `<span class="ov-chip"><svg viewBox="0 0 24 24">${ICONS[name]}</svg></span>`;
+const fmt = (value) => Number(value || 0).toLocaleString("pt-BR");
+
+// curva suave com área embaixo — mesmo desenho dos cartões do mockup
+function sparkline(series, { down = false, width = 96, height = 36 } = {}) {
   const max = Math.max(1, ...series);
-  const step = series.length > 1 ? 200 / (series.length - 1) : 200;
-  const points = series.map((value, index) => `${(index * step).toFixed(1)},${(38 - value / max * 32).toFixed(1)}`).join(" ");
-  return `<svg viewBox="0 0 200 42" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,42 ${points} 200,42" class="spark-fill${hot ? " hot" : ""}"/><polyline points="${points}" class="spark-line${hot ? " hot" : ""}"/></svg>`;
+  const step = series.length > 1 ? width / (series.length - 1) : width;
+  const points = series.map((value, index) => [index * step, height - 4 - value / max * (height - 10)]);
+  let path = `M${points[0][0]} ${points[0][1]}`;
+  for (let i = 1; i < points.length; i += 1) {
+    const [x0, y0] = points[i - 1]; const [x1, y1] = points[i]; const cx = (x0 + x1) / 2;
+    path += ` C${cx} ${y0} ${cx} ${y1} ${x1} ${y1}`;
+  }
+  const color = down ? "var(--danger)" : "var(--text)";
+  const id = `sp${Math.random().toString(36).slice(2, 8)}`;
+  return `<svg class="spark" viewBox="0 0 ${width} ${height}" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".2"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${path} L${width} ${height} L0 ${height}Z" fill="url(#${id})"/><path d="${path}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round"/><circle cx="${points.at(-1)[0]}" cy="${points.at(-1)[1]}" r="2.5" fill="${color}"/></svg>`;
 }
 
 function kpiDelta(value, previous, unit) {
-  if (previous === null || previous === undefined || value === null) return '<span class="kpi-delta muted">sem período anterior pra comparar</span>';
+  if (previous === null || previous === undefined || value === null) return { html: '<span class="ov-delta flat">novo</span>', note: "sem semana anterior pra comparar", down: false };
   const diff = unit === "pp" ? value - previous : previous ? Math.round((value - previous) / previous * 100) : null;
-  if (diff === null) return value ? '<span class="kpi-delta up">▲ novo nesta semana</span>' : '<span class="kpi-delta muted">igual à semana anterior</span>';
-  if (diff === 0) return '<span class="kpi-delta muted">igual à semana anterior</span>';
-  return `<span class="kpi-delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "▲" : "▼"} ${Math.abs(diff)}${unit === "pp" ? " p.p." : "%"} vs semana anterior</span>`;
+  if (diff === null) return { html: '<span class="ov-delta up">novo</span>', note: "nada na semana anterior", down: false };
+  if (diff === 0) return { html: '<span class="ov-delta flat">= 0</span>', note: "igual à semana anterior", down: false };
+  return { html: `<span class="ov-delta ${diff > 0 ? "up" : "down"}">${diff > 0 ? "↑" : "↓"} ${Math.abs(diff)}${unit === "pp" ? " p.p." : "%"}</span>`, note: "vs semana anterior", down: diff < 0 };
 }
 
+// os três cartões menores (últimos 7 dias); o cartão laranja do mês vem do /api/overview
 function renderKpis(kpis) {
   if (!kpis) return;
-  const cards = [
-    ["DMs enviadas", kpis.dmSent, "", true],
-    ["Taxa de resposta", kpis.responseRate, "pp"],
-    ["Links entregues", kpis.delivered, ""],
-    ["Leads capturados", kpis.leads, ""],
-  ];
-  $("#kpi-grid").innerHTML = cards.map(([label, metric, unit, hot]) => `<article class="kpi${hot ? " hot" : ""}">
-    <span>${label}</span><strong>${metric.value === null ? "—" : `${metric.value.toLocaleString("pt-BR")}${unit === "pp" ? "%" : ""}`}</strong>
-    ${kpiDelta(metric.value, metric.previous, unit)}${sparkline(metric.series, hot)}</article>`).join("");
-  $("#kpis-coverage").textContent = kpis.complete ? "" : `O log de atividade só guarda os eventos mais recentes — DMs e respostas contam desde ${new Date(kpis.since).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}.`;
+  const cards = [["reply", "Taxa de resposta", kpis.responseRate, "pp"], ["link", "Links entregues", kpis.delivered, ""], ["lead", "Leads capturados", kpis.leads, ""]];
+  $("#kpi-grid").innerHTML = cards.map(([icon, label, metric, unit]) => {
+    const delta = kpiDelta(metric.value, metric.previous, unit);
+    const value = metric.value === null ? "—" : unit === "pp" ? `${metric.value}<small>%</small>` : fmt(metric.value);
+    return `<article class="ov-card ov-kpi"><span class="ov-kpi-label">${chip(icon)}${label}</span><strong>${value}</strong>
+      <div class="ov-kpi-foot"><div>${delta.html}<em>${delta.note}</em></div>${sparkline(metric.series, { down: delta.down })}</div></article>`;
+  }).join("");
+  $("#kpis-coverage").textContent = kpis.complete ? "" : `Resposta, links e leads: últimos 7 dias. O log de atividade só guarda os eventos mais recentes, então resposta e links contam desde ${new Date(kpis.since).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}.`;
 }
 
 function relativeTime(iso) {
@@ -205,28 +233,40 @@ function relativeTime(iso) {
 // porque esse estado só existia na tela de Saúde.
 function renderStatusStrip() {
   const report = state.health;
-  const pills = [];
+  const rows = [];
   if (report) {
     const { token, webhook } = report;
-    const tokenText = !token.configured ? "não configurado" : token.expired ? "expirado — gere um novo" : token.valid === false ? "inválido" : token.daysLeft != null ? `válido · ${token.daysLeft} dias` : "válido";
-    pills.push([token.status, "Token", tokenText, "health"]);
+    const tokenText = !token.configured ? "não configurado" : token.expired ? "expirado — gere um novo" : token.valid === false ? "inválido" : token.daysLeft != null ? `${token.daysLeft} de 60 dias` : "válido";
+    rows.push({ status: token.status, label: "Token do Instagram", text: tokenText, view: "health", meter: token.daysLeft != null ? Math.min(100, token.daysLeft / 60 * 100) : null });
     const silentHours = webhook.lastEventAt ? (Date.now() - Date.parse(webhook.lastEventAt)) / 3_600_000 : Infinity;
-    pills.push([!webhook.configured ? "critical" : silentHours > 48 ? "warn" : "ok", "Webhook", webhook.configured ? `último evento ${relativeTime(webhook.lastEventAt)}` : "faltando credenciais", "health"]);
-    if (report.store.status !== "ok") pills.push([report.store.status, "Banco", report.store.error || "lento", "health"]);
+    rows.push({ status: !webhook.configured ? "critical" : silentHours > 48 ? "warn" : "ok", label: "Webhook", text: webhook.configured ? `último evento ${relativeTime(webhook.lastEventAt)}` : "faltando credenciais", view: "health" });
+    rows.push({ status: report.store.status === "ok" && report.store.latencyMs > 700 ? "warn" : report.store.status, label: "Banco de dados", text: report.store.ok ? `${report.store.latencyMs} ms${report.store.latencyMs > 700 ? " · lento" : ""}` : report.store.error || "erro", view: "health" });
   }
-  if (state.posts) {
-    const today = new Date().toDateString();
-    const scheduledToday = state.posts.filter((post) => post.status === "scheduled" && new Date(post.scheduledAt).toDateString() === today).length;
-    const failed = state.posts.filter((post) => post.status === "failed").length;
-    if (failed) pills.push(["critical", `${failed} Reel${failed > 1 ? "s" : ""}`, "falhou ao publicar", "publish"]);
-    pills.push([scheduledToday ? "warn" : "ok", "Reels hoje", scheduledToday ? `${scheduledToday} agendado${scheduledToday > 1 ? "s" : ""}` : "nada agendado", "publish"]);
-  }
-  if (state.postsQuota?.total) pills.push(["ok", "Cota da Meta", `${state.postsQuota.used} / ${state.postsQuota.total} em 24 h`, "publish"]);
-  $("#status-strip").innerHTML = pills.map(([status, label, text, view]) => `<button type="button" class="status-pill ${status}" data-go-view="${view}"><i></i>${escapeHtml(label)} <b>${escapeHtml(text)}</b></button>`).join("");
+  if (state.postsQuota?.total) rows.push({ status: state.postsQuota.used / state.postsQuota.total > .8 ? "warn" : "ok", label: "Cota de publicação", text: `${state.postsQuota.used} de ${state.postsQuota.total} em 24 h`, view: "publish", meter: state.postsQuota.used / state.postsQuota.total * 100 });
+  $("#status-strip").innerHTML = rows.length ? rows.map((row) => `<button type="button" class="ov-health-row ${row.status === "ok" ? "" : row.status}" data-go-view="${row.view}"><i></i>${escapeHtml(row.label)}<span>${escapeHtml(row.text)}</span></button>${row.meter != null ? `<div class="ov-meter ${row.meter < 20 && row.label.startsWith("Token") ? "warn" : ""}"><i style="width:${Math.max(2, Math.round(row.meter))}%"></i></div>` : ""}`).join("") : '<p class="empty">Verificando…</p>';
   const healthStatus = report ? [report.token.status, report.webhook.status, report.store.status] : [];
   const dot = $("#nav-health-dot");
   dot.hidden = !report;
   dot.className = `nav-dot ${healthStatus.includes("critical") ? "critical" : healthStatus.includes("warn") ? "warn" : "ok"}`;
+  renderNotices();
+}
+
+// Sino do topo: só o que pede uma ação sua agora.
+function renderNotices() {
+  const notices = [];
+  const report = state.health;
+  if (report?.token && (report.token.expired || report.token.valid === false)) notices.push(["critical", "!", "O token do Instagram parou de funcionar", "nenhuma automação responde até trocar", "health"]);
+  else if (report?.token?.daysLeft != null && report.token.daysLeft < 10) notices.push(["warn", "!", `O token vence em ${report.token.daysLeft} dias`, "a renovação automática deve resolver — confira em Saúde", "health"]);
+  const failed = (state.posts || []).filter((post) => post.status === "failed");
+  if (failed.length) notices.push(["critical", "!", `${failed.length} Reel${failed.length > 1 ? "s" : ""} falhou ao publicar`, truncate(failed[0].caption || failed[0].fileName, 60), "publish"]);
+  const waiting = state.overview?.waitingFollowToday || 0;
+  if (waiting) notices.push(["warn", "…", `${waiting} pessoa${waiting > 1 ? "s" : ""} esperando seguir o perfil`, "hoje · o link sai quando seguirem", "dashboard"]);
+  const untouched = (state.leads || []).filter((lead) => !lead.stage || lead.stage === "novo").length;
+  if (untouched) notices.push(["ok", "+", `${untouched} lead${untouched > 1 ? "s" : ""} ainda sem contato`, "estágio Novo no pipeline", "pipeline"]);
+  const colors = { critical: "var(--danger)", warn: "var(--yellow)", ok: "var(--green)" };
+  $("#bell-list").innerHTML = notices.length ? notices.map(([tone, icon, title, detail, view]) => `<button type="button" class="top-notice" data-go-view="${view}"><i style="background:color-mix(in srgb,${colors[tone]} 14%,transparent);color:${colors[tone]}">${icon}</i><span>${escapeHtml(title)}<small>${escapeHtml(detail)}</small></span></button>`).join("") : '<p class="top-pop-empty">Nada pedindo sua atenção agora.</p>';
+  $("#bell-count").hidden = !notices.length;
+  $("#bell-count").textContent = notices.length;
 }
 
 async function loadContentRoi() {
@@ -566,6 +606,7 @@ async function loadHealth() {
     const report = await request("/api/health");
     state.health = report;
     renderStatusStrip();
+    renderTopbar();
     if (state.activity) renderActivity(state.activity);
     const { token } = report;
     const tokenLabel = !token.configured ? "Não configurado"
@@ -598,6 +639,10 @@ async function loadWebhookSettings() {
   if (settings.brandLogoUrl) $("#brand-logo-preview").src = settings.brandLogoUrl;
   applyBranding(settings);
   if (state.activity) renderActivity(state.activity);
+  $("#goals-form").elements.dmDailyGoal.value = settings.dmDailyGoal || "";
+  $("#goals-form").elements.leadMonthlyGoal.value = settings.leadMonthlyGoal || "";
+  renderTopbar();
+  if (state.overview) renderOverview();
 }
 
 $("#webhook-form").addEventListener("submit", async (event) => {
@@ -977,7 +1022,7 @@ document.querySelectorAll("[data-scroll]").forEach((button) => button.addEventLi
   document.querySelectorAll("nav button").forEach((item) => item.classList.remove("active"));
   button.classList.add("active");
   switchView(button.dataset.view);
-  $(`#${button.dataset.scroll}`).scrollIntoView({ behavior: "smooth" });
+  ($(`#${button.dataset.scroll}`) || $("#top")).scrollIntoView({ behavior: "smooth" });
 }));
 document.querySelectorAll(".filter").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".filter").forEach((item) => item.classList.remove("active"));
@@ -1162,6 +1207,347 @@ $("#pipeline-board").addEventListener("drop", async (event) => {
   } catch (error) { alert(error.message); }
 });
 
+// ── Visão geral (v3) ────────────────────────────────────────────────────────
+const RULE_COLORS = ["var(--cyan)", "#ffc54f", "#6b95ff", "#b294ff", "#4fe0a0", "#ff7aa8"];
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+let overviewRange = "14d";
+let overviewRule = "";
+
+const parseDay = (day) => { const [y, m, d] = day.split("-").map(Number); return new Date(y, m - 1, d); };
+const dayLabel = (day) => { const date = parseDay(day); return `${WEEKDAYS[date.getDay()]} ${date.getDate()}`; };
+const shortDate = (day) => parseDay(day).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+
+function countUp(element, target, suffix = "") {
+  const start = performance.now();
+  const step = (now) => {
+    const progress = Math.min(1, (now - start) / 1000);
+    element.textContent = `${fmt(Math.round(target * (1 - Math.pow(1 - progress, 4))))}${suffix}`;
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+async function loadOverview() {
+  const params = new URLSearchParams({ range: overviewRange });
+  if (overviewRule) params.set("rule", overviewRule);
+  state.overview = await request(`/api/overview?${params}`);
+  renderOverview();
+}
+
+function renderOverview() {
+  const data = state.overview;
+  if (!data) return;
+  const hour = new Date().getHours();
+  const firstName = String(state.settings.brandName || "").trim().split(/\s+/)[0];
+  $("#ov-greeting").textContent = `${hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite"}${firstName ? `, ${firstName}` : ""}`;
+  renderOverviewSummary();
+
+  // cartão do mês
+  const { month, goals } = data;
+  const monthGoal = goals.dmDaily ? goals.dmDaily * month.daysInMonth : 0;
+  const monthName = new Date().toLocaleDateString("pt-BR", { month: "long" });
+  const change = month.previousSent ? Math.round((month.sent - month.previousSent) / month.previousSent * 100) : null;
+  $("#ov-kpi-month").innerHTML = `<span class="ov-kpi-label">${chip("dm")}DMs enviadas · ${monthName}</span>
+    <strong id="ov-month-value">0</strong>
+    <span class="ov-meta-line">${change === null ? "<span class=\"ov-delta\">mês em curso</span>" : `<span class="ov-delta">${change >= 0 ? "↑" : "↓"} ${Math.abs(change)}%</span>vs o mês passado no mesmo ponto`}</span>
+    <div class="ov-progress"><i id="ov-month-progress"></i></div>
+    <div class="ov-progress-labels">${monthGoal ? `<span>${Math.round(month.sent / monthGoal * 100)}% da meta</span><span>meta ${fmt(monthGoal)}</span>` : `<span>dia ${month.day} de ${month.daysInMonth}</span><button type="button" data-go-view="health" data-scroll-to="goals-section">definir meta</button>`}</div>`;
+  countUp($("#ov-month-value"), month.sent);
+  requestAnimationFrame(() => { $("#ov-month-progress").style.width = `${Math.min(100, monthGoal ? month.sent / monthGoal * 100 : month.day / month.daysInMonth * 100)}%`; });
+
+  // resumo do dia na barra lateral
+  const dayGoal = goals.dmDaily;
+  $("#today-summary").textContent = dayGoal ? `${fmt(data.today.sent)} DMs · ${Math.round(data.today.sent / dayGoal * 100)}% da meta` : `${fmt(data.today.sent)} DMs enviadas`;
+  $("#today-ring").style.strokeDashoffset = 100.5 * (1 - Math.min(1, dayGoal ? data.today.sent / dayGoal : data.today.sent ? 1 : 0));
+
+  renderOverviewChart();
+  renderOverviewRanking();
+  renderOverviewGoal();
+  renderOverviewQueue();
+  renderNotices();
+  const active = state.rules.filter((rule) => rule.enabled).length;
+  $("#nav-badge-rules").hidden = !active;
+  $("#nav-badge-rules").textContent = active;
+}
+
+// a fila de Reels chega por outra requisição — o resumo é redesenhado quando ela chegar
+function renderOverviewSummary() {
+  const data = state.overview;
+  if (!data) return;
+  const reelsToday = (state.posts || []).filter((post) => post.status === "scheduled" && new Date(post.scheduledAt).toDateString() === new Date().toDateString()).length;
+  $("#ov-summary").innerHTML = [
+    ["var(--cyan)", `${fmt(data.today.sent)} DM${data.today.sent === 1 ? "" : "s"}`, `enviada${data.today.sent === 1 ? "" : "s"} desde a meia-noite`],
+    ["var(--yellow)", `${data.waitingFollowToday} pessoa${data.waitingFollowToday === 1 ? "" : "s"}`, "aguardando seguir"],
+    ["#6b95ff", `${reelsToday} Reel${reelsToday === 1 ? "" : "s"}`, `agendado${reelsToday === 1 ? "" : "s"} pra hoje`],
+  ].map(([color, strong, text]) => `<span><i style="background:${color}"></i><b>${strong}</b> ${text}</span>`).join("");
+}
+
+function renderOverviewChart() {
+  const data = state.overview;
+  const points = data.series;
+  const weekly = data.range === "13w";
+  // a meta é da conta inteira — com uma automação filtrada ela não serve de régua
+  const target = data.goals.dmDaily && !overviewRule ? data.goals.dmDaily * (weekly ? 7 : 1) : 0;
+  const total = points.reduce((sum, point) => sum + point.value, 0);
+  const best = points.reduce((top, point) => point.value > top.value ? point : top, points[0]);
+  const hits = target ? points.filter((point) => point.value >= target).length : 0;
+  const unit = weekly ? "semana" : "dia";
+  $("#ov-chart-title-goal").textContent = target ? "contra a meta" : "por " + unit;
+  $("#ov-chart-sub").innerHTML = overviewRule ? "Só a automação selecionada · a meta da conta não vale pra uma automação sozinha" : target ? `${overviewRule ? "Automação selecionada" : "Toda automação"} — <b style="color:var(--cyan);font-weight:500">laranja</b> quando o ${unit} bateu a meta` : `${overviewRule ? "Automação selecionada" : "Toda automação"} · defina uma meta pra ver quais ${unit}s bateram`;
+  const filters = [`<button type="button" class="${overviewRule ? "" : "on"}" data-ov-rule="">Todas</button>`].concat(data.ranking.slice(0, 4).map((rule, index) => `<button type="button" class="${overviewRule === rule.id ? "on" : ""}" data-ov-rule="${escapeHtml(rule.id)}"><i style="background:${RULE_COLORS[index]}"></i>${escapeHtml(truncate(rule.name, 14))}</button>`));
+  $("#ov-chart-stats").innerHTML = `<div><small>Enviadas</small><span class="big" id="ov-total">0</span></div>
+    ${target ? `<div><small>Bateu a meta</small><b>${hits} <em>de ${points.length} ${unit}s</em></b></div><div><small><span class="dash"></span>Meta</small><b>${fmt(target)} <em>por ${unit}</em></b></div>` : overviewRule ? "" : `<div><small>Meta</small><button type="button" class="link" data-go-view="health" data-scroll-to="goals-section">definir meta</button></div>`}
+    ${best?.value ? `<div><small>Melhor ${unit}</small><b>${fmt(best.value)} <em>· ${weekly ? `até ${shortDate(best.day)}` : dayLabel(best.day)}</em></b></div>` : ""}
+    <div class="ov-filters">${filters.join("")}</div>`;
+  countUp($("#ov-total"), total);
+  const tracked = data.trackedSince;
+  $("#ov-legend-note").textContent = tracked && tracked > points[0].day ? `o resumo diário começou em ${shortDate(tracked)} — antes disso fica zerado` : "passe o mouse num ponto pra ver os detalhes";
+
+  const svg = $("#ov-chart");
+  if (!points.some((point) => point.value) && !target) {
+    svg.innerHTML = "";
+    svg.parentElement.querySelector(".ov-tip").classList.remove("show");
+    svg.style.display = "none";
+    if (!$("#ov-empty-chart")) svg.insertAdjacentHTML("afterend", '<div class="ov-empty-chart" id="ov-empty-chart">Nenhuma DM nesse período ainda.</div>');
+    return;
+  }
+  svg.style.display = "";
+  $("#ov-empty-chart")?.remove();
+  const W = 900; const H = 280; const left = 44; const bottom = 30; const top = 16;
+  const max = Math.max(10, Math.ceil(Math.max(...points.map((point) => point.value), target) * 1.18 / 10) * 10);
+  const y = (value) => top + (H - bottom - top) * (1 - value / max);
+  const step = (W - left - 70) / Math.max(1, points.length - 1);
+  const every = points.length > 20 ? 3 : 1;
+  let out = '<defs><linearGradient id="ov-ember" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="var(--blue)" stop-opacity=".15"/><stop offset=".6" stop-color="var(--blue)"/><stop offset="1" stop-color="var(--cyan)"/></linearGradient><linearGradient id="ov-grey" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#6c665f" stop-opacity=".1"/><stop offset="1" stop-color="#8b847d"/></linearGradient><filter id="ov-glow"><feGaussianBlur stdDeviation="3"/></filter></defs>';
+  for (let i = 0; i <= 5; i += 1) {
+    const value = max / 5 * i; const yy = y(value);
+    out += `<line x1="${left}" x2="${W}" y1="${yy}" y2="${yy}" stroke="#ffffff0b"/><text x="0" y="${yy + 4}" fill="var(--quiet)" font-size="11" font-family="Sora">${fmt(Math.round(value))}</text>`;
+  }
+  if (target) {
+    const ty = y(target);
+    out += `<line x1="${left}" x2="${W}" y1="${ty}" y2="${ty}" stroke="var(--cyan)" stroke-opacity=".6" stroke-dasharray="5 6"/><rect x="${left - 4}" y="${ty - 11}" width="${Math.max(40, String(target).length * 8 + 16)}" height="22" rx="7" fill="var(--cyan)"/><text x="${left - 4 + Math.max(40, String(target).length * 8 + 16) / 2}" y="${ty + 4}" fill="#fff" font-size="11" font-weight="600" text-anchor="middle" font-family="Sora">${fmt(target)}</text>`;
+  }
+  points.forEach((point, i) => {
+    const x = left + 26 + i * step; const yy = y(point.value); const current = i === points.length - 1;
+    const hit = target ? point.value >= target : point.value > 0;
+    const width = hit || current ? 5 : 3.5;
+    const delay = (i * (points.length > 20 ? .015 : .035)).toFixed(3);
+    out += `<rect class="col-hit" data-i="${i}" data-y="${yy}" x="${x - step / 2}" y="${top}" width="${step}" height="${H - bottom - top}" rx="10"/>`;
+    if (point.value) out += `<rect class="stem" style="animation-delay:${delay}s" x="${x - width / 2}" y="${yy}" width="${width}" height="${H - bottom - yy}" rx="${width / 2}" fill="${current ? "#fff" : hit ? "url(#ov-ember)" : "url(#ov-grey)"}" pointer-events="none"/>`;
+    if (hit && !current && point.value) out += `<circle cx="${x}" cy="${yy}" r="9" fill="var(--cyan)" opacity=".4" filter="url(#ov-glow)" pointer-events="none"/>`;
+    out += `<circle class="dot" style="animation-delay:${(Number(delay) + .35).toFixed(3)}s" cx="${x}" cy="${yy}" r="${current ? 7 : point.value ? 6 : 3}" fill="${current ? "#fff" : hit ? "var(--cyan)" : "#8b847d"}" stroke="${current ? "#ffffff44" : "none"}" stroke-width="${current ? 8 : 0}" pointer-events="none"/>`;
+    if (i % every === 0 || current) out += `<text x="${x}" y="${H - 9}" fill="${current ? "var(--cyan)" : "var(--muted)"}" font-weight="${current ? 600 : 400}" font-size="11" text-anchor="middle" font-family="Sora">${weekly ? shortDate(point.day) : current && !weekly ? "Hoje" : dayLabel(point.day)}</text>`;
+  });
+  svg.innerHTML = out;
+}
+
+function showOverviewTip(event) {
+  const hit = event.target.closest(".col-hit");
+  const tip = $("#ov-tip");
+  if (!hit || !state.overview) { tip.classList.remove("show"); return; }
+  const data = state.overview; const point = data.series[Number(hit.dataset.i)];
+  const weekly = data.range === "13w";
+  // a meta é da conta inteira — com uma automação filtrada ela não serve de régua
+  const target = data.goals.dmDaily && !overviewRule ? data.goals.dmDaily * (weekly ? 7 : 1) : 0;
+  const rule = overviewRule ? data.rules.find((item) => item.id === overviewRule) : null;
+  const title = weekly ? `${shortDate(point.start)} a ${shortDate(point.day)}` : `${dayLabel(point.day)}${Number(hit.dataset.i) === data.series.length - 1 ? " · hoje" : ""}`;
+  const diff = point.value - target;
+  tip.innerHTML = `<strong>${title}<span>${fmt(point.value)} DMs</span></strong>${rule ? `<div><i style="background:var(--cyan)"></i>${escapeHtml(rule.name)}<b>${fmt(point.value)}</b></div>` : ""}${target ? `<div class="verdict" style="color:${diff >= 0 ? "var(--green)" : "var(--muted)"}">${diff >= 0 ? `${fmt(diff)} acima da meta` : `${fmt(-diff)} abaixo da meta`}</div>` : ""}`;
+  tip.classList.add("show");
+  const wrap = $("#ov-chart-wrap").getBoundingClientRect(); const box = hit.getBoundingClientRect();
+  const dotY = Number(hit.dataset.y) * wrap.height / 280;
+  const above = dotY - tip.offsetHeight - 16;
+  tip.style.left = `${Math.min(wrap.width - tip.offsetWidth / 2, Math.max(tip.offsetWidth / 2, box.left - wrap.left + box.width / 2))}px`;
+  tip.style.top = `${above >= 0 ? above : dotY + 18}px`;
+}
+
+function renderOverviewRanking() {
+  const ranking = state.overview.ranking;
+  $("#ov-rank").innerHTML = ranking.length ? ranking.map((rule, index) => {
+    const color = RULE_COLORS[index % RULE_COLORS.length];
+    const max = Math.max(1, ...rule.series); const step = 76 / (rule.series.length - 1);
+    const points = rule.series.map((value, i) => `${(i * step).toFixed(1)},${(24 - value / max * 20).toFixed(1)}`).join(" ");
+    const tag = String(rule.keyword || rule.name).replace(/[^a-zà-ú0-9]/gi, "").slice(0, 3).toUpperCase() || "—";
+    return `<button type="button" class="ov-rank-row" data-edit="${escapeHtml(rule.id)}" title="Editar automação"><span class="kw" style="background:color-mix(in srgb,${color} 14%,transparent);color:${color}">${escapeHtml(tag)}</span><span class="name"><span>${escapeHtml(rule.name)}</span><small>palavra “${escapeHtml(rule.keyword)}”</small></span><svg viewBox="0 0 76 26"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg><b>${fmt(rule.sent)}</b></button>`;
+  }).join("") : '<p class="empty">Nenhuma automação mandou DM nos últimos 14 dias.</p>';
+}
+
+function renderOverviewGoal() {
+  const { month, goals } = state.overview;
+  const card = $("#ov-goal");
+  const monthName = new Date().toLocaleDateString("pt-BR", { month: "long" });
+  const head = `<div class="ov-card-head"><span class="q">${chip("target")}<h2>Meta de leads · ${monthName}</h2></span><button type="button" class="ov-round" data-go-view="health" data-scroll-to="goals-section" title="Ajustar meta"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></svg></button></div>`;
+  if (!goals.leadMonthly) {
+    card.innerHTML = `${head}<div class="ov-goal-empty">${fmt(month.leads)} lead${month.leads === 1 ? "" : "s"} neste mês. Defina uma meta mensal pra acompanhar o ritmo.<br><button type="button" class="ov-btn" data-go-view="health" data-scroll-to="goals-section">Definir meta de leads</button></div>`;
+    return;
+  }
+  const pct = Math.min(1, month.leads / goals.leadMonthly);
+  const pace = Math.round(month.leads / month.day * month.daysInMonth);
+  const left = Math.max(0, goals.leadMonthly - month.leads);
+  const daysLeft = Math.max(1, month.daysInMonth - month.day);
+  const ticks = 64; const done = Math.round(ticks * pct);
+  let gauge = "";
+  for (let i = 0; i < ticks; i += 1) {
+    const angle = (-215 + i * (250 / (ticks - 1))) * Math.PI / 180; const r1 = 56; const r2 = i < done ? 70 : 65;
+    gauge += `<line data-on="${i < done}" style="transition:stroke .3s ${i * 18}ms" x1="${75 + r1 * Math.cos(angle)}" y1="${75 + r1 * Math.sin(angle)}" x2="${75 + r2 * Math.cos(angle)}" y2="${75 + r2 * Math.sin(angle)}" stroke="#ffffff1c" stroke-width="3" stroke-linecap="round"/>`;
+  }
+  gauge += `<text x="75" y="80" fill="var(--text)" font-size="30" font-weight="500" text-anchor="middle" font-family="Sora">${Math.round(pct * 100)}%</text><text x="75" y="100" fill="var(--muted)" font-size="10" text-anchor="middle" font-family="Sora">${fmt(month.leads)} de ${fmt(goals.leadMonthly)} leads</text>`;
+  card.innerHTML = `${head}<div class="ov-goal"><svg viewBox="0 0 150 150">${gauge}</svg><div class="ov-goal-side"><div><small>No ritmo pra</small><b class="acc">${fmt(pace)} leads</b></div><div><small>Faltam</small><b>${fmt(left)}</b></div><div><small>Por dia, daqui pra frente</small><b>${(left / daysLeft).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b></div></div></div>`;
+  requestAnimationFrame(() => setTimeout(() => card.querySelectorAll('[data-on="true"]').forEach((line) => line.setAttribute("stroke", "var(--cyan)")), 120));
+}
+
+let queueTimer = null;
+function renderOverviewQueue() {
+  const card = $("#ov-queue");
+  if (!card) return;
+  const posts = state.posts || [];
+  const upcoming = posts.filter((post) => post.status === "scheduled").sort((a, b) => Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt));
+  const failed = posts.filter((post) => post.status === "failed").length;
+  const head = `<div class="ov-card-head"><span class="q">${chip("reel")}<h2>Fila de Reels</h2></span><button type="button" class="ov-round" data-go-view="publish" title="Abrir Publicar"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></svg></button></div>`;
+  const play = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+  const next = upcoming[0];
+  clearInterval(queueTimer);
+  card.innerHTML = `${head}${next ? `<div class="ov-next"><div class="ov-reel">${play}</div><div><small>Próximo a sair</small><span class="ov-when">${escapeHtml(formatDateTime(next.scheduledAt))}${next.kind === "trial" ? "<em>Trial</em>" : ""}</span><div class="ov-countdown" id="ov-countdown"></div><p>${escapeHtml(truncate(next.caption || next.fileName, 110))}</p></div></div>
+    ${upcoming.length > 1 ? `<div class="ov-upcoming">${upcoming.slice(1, 3).map((post, index) => `<div><span class="ov-reel ${index ? "alt2" : "alt"}"></span><span>${escapeHtml(truncate(post.caption || post.fileName, 42))}<small>${escapeHtml(formatDateTime(post.scheduledAt))}</small></span></div>`).join("")}</div>` : ""}`
+    : '<p class="ov-queue-empty">Nenhum Reel agendado. Agende o próximo e acompanhe a contagem aqui.</p>'}
+    <button type="button" class="ov-wide" data-go-view="publish"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Publicar Reel</button>
+    ${failed ? `<button type="button" class="ov-warn" data-go-view="publish">${failed} Reel${failed > 1 ? "s" : ""} falhou — tentar de novo</button>` : ""}`;
+  if (next) {
+    const tick = () => {
+      const box = $("#ov-countdown");
+      if (!box) return clearInterval(queueTimer);
+      const remaining = Math.max(0, Math.floor((Date.parse(next.scheduledAt) - Date.now()) / 1000));
+      const d = Math.floor(remaining / 86400); const h = Math.floor(remaining % 86400 / 3600); const m = Math.floor(remaining % 3600 / 60); const s = remaining % 60;
+      const parts = d ? [[d, "d"], [h, "h"], [m, "min"]] : [[h, "h"], [String(m).padStart(2, "0"), "min"], [String(s).padStart(2, "0"), "s"]];
+      box.innerHTML = remaining ? parts.map(([value, unit]) => `<span>${value}<small>${unit}</small></span>`).join("") : "<span>saindo agora</span>";
+    };
+    tick();
+    queueTimer = setInterval(tick, 1000);
+  }
+}
+
+// topo: data, usuário, avisos, menu recolhível e paleta de comandos
+function renderTopbar() {
+  $("#top-date").textContent = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, (c) => c.toUpperCase());
+  const name = state.settings.brandName || "Meu Instagram";
+  const handle = state.health?.token?.username || state.settings.brandHandle || "";
+  $("#top-user-name").textContent = name;
+  $("#brand-handle").textContent = handle ? `@${handle}` : "";
+  $("#top-avatar").innerHTML = state.settings.brandLogoUrl ? `<img src="${escapeHtml(state.settings.brandLogoUrl)}" alt="">` : escapeHtml(name.split(/\s+/).map((word) => word[0]).join("").slice(0, 2).toUpperCase());
+}
+
+function goToView(view, scrollTo) {
+  const button = document.querySelector(`nav button[data-view="${view}"]`);
+  if (button) button.click();
+  if (scrollTo) setTimeout(() => $(`#${scrollTo}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+}
+
+const COMMANDS = () => [
+  ["AÇÕES", "Nova automação", "N", () => openRuleDialog()],
+  ["AÇÕES", "Publicar ou agendar Reel", "", () => goToView("publish")],
+  ["AÇÕES", "Nova campanha", "", () => { goToView("campaigns"); openCampaignDialog(); }],
+  ["AÇÕES", "Definir metas", "", () => goToView("health", "goals-section")],
+  ...[...document.querySelectorAll("aside nav button")].map((button) => ["IR PARA", button.querySelector("span")?.textContent || "", "", () => button.click()]),
+  ...state.rules.slice(0, 40).map((rule) => ["AUTOMAÇÕES", `${rule.name} · “${rule.keyword}”`, rule.enabled ? "" : "pausada", () => openRuleDialog(null, rule)]),
+  ...(state.contacts || []).filter((contact) => contact.username).slice(0, 200).map((contact) => ["CONTATOS", `@${contact.username}`, contact.stage || "", () => { goToView("inbox"); }]),
+  ...(state.leads || []).slice(0, 100).map((lead) => ["LEADS", lead.name, campaignTitle(lead.campaignSlug), () => { leadsFilter = lead.campaignSlug; goToView("campaigns", "leads"); renderLeadsFilter(); renderLeads(); }]),
+];
+let cmdkItems = [];
+let cmdkIndex = 0;
+function renderCmdk(query = "") {
+  const q = query.trim().toLowerCase();
+  cmdkItems = COMMANDS().filter(([, label]) => label && (!q || label.toLowerCase().includes(q))).slice(0, q ? 40 : 12);
+  cmdkIndex = 0;
+  let group = "";
+  $("#cmdk-list").innerHTML = cmdkItems.length ? cmdkItems.map(([section, label, hint], index) => `${section !== group ? `<h5>${(group = section)}</h5>` : ""}<button type="button" class="cmdk-item${index ? "" : " sel"}" data-cmd="${index}">${escapeHtml(label)}${hint ? `<small>${escapeHtml(hint)}</small>` : ""}</button>`).join("") : '<p class="cmdk-empty">Nada encontrado.</p>';
+}
+function openCmdk() { renderCmdk(); $("#cmdk").hidden = false; $("#cmdk-q").value = ""; setTimeout(() => $("#cmdk-q").focus(), 30); }
+function closeCmdk() { $("#cmdk").hidden = true; }
+function runCmd(index) { const item = cmdkItems[index]; if (!item) return; closeCmdk(); item[3](); }
+
+$("#open-cmdk").addEventListener("click", openCmdk);
+$("#cmdk").addEventListener("click", (event) => {
+  if (event.target.id === "cmdk") return closeCmdk();
+  const item = event.target.closest("[data-cmd]");
+  if (item) runCmd(Number(item.dataset.cmd));
+});
+$("#cmdk-q").addEventListener("input", (event) => renderCmdk(event.target.value));
+$("#cmdk-q").addEventListener("keydown", (event) => {
+  const items = [...document.querySelectorAll(".cmdk-item")];
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    cmdkIndex = (cmdkIndex + (event.key === "ArrowDown" ? 1 : -1) + items.length) % Math.max(1, items.length);
+    items.forEach((item, index) => item.classList.toggle("sel", index === cmdkIndex));
+    items[cmdkIndex]?.scrollIntoView({ block: "nearest" });
+  }
+  if (event.key === "Enter") { event.preventDefault(); runCmd(cmdkIndex); }
+});
+document.addEventListener("keydown", (event) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCmdk(); }
+  else if (event.key === "Escape" && !$("#cmdk").hidden) closeCmdk();
+  else if (event.key.toLowerCase() === "n" && !typing && !event.ctrlKey && !event.metaKey && !document.querySelector("dialog[open]") && $("#cmdk").hidden) openRuleDialog();
+});
+for (const [buttonId, popId] of [["#bell", "#bell-pop"], ["#user-chip", "#user-pop"]]) {
+  $(buttonId).addEventListener("click", (event) => {
+    event.stopPropagation();
+    const open = !$(popId).classList.contains("open");
+    document.querySelectorAll(".top-pop").forEach((pop) => pop.classList.remove("open"));
+    $(popId).classList.toggle("open", open);
+  });
+}
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".top-pop")) document.querySelectorAll(".top-pop").forEach((pop) => pop.classList.remove("open"));
+  const go = event.target.closest("[data-go-view]");
+  if (go) { document.querySelectorAll(".top-pop").forEach((pop) => pop.classList.remove("open")); goToView(go.dataset.goView, go.dataset.scrollTo); }
+});
+$("#side-collapse").addEventListener("click", () => {
+  document.body.classList.toggle("side-collapsed");
+  localStorage.setItem("md-side-collapsed", document.body.classList.contains("side-collapsed") ? "1" : "");
+});
+if (localStorage.getItem("md-side-collapsed")) document.body.classList.add("side-collapsed");
+$("#side-new-rule").addEventListener("click", () => openRuleDialog());
+$("#ov-report").addEventListener("click", () => $("#analytics").scrollIntoView({ behavior: "smooth", block: "start" }));
+$("#ov-range").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-range]");
+  if (!button) return;
+  overviewRange = button.dataset.range;
+  $("#ov-range").querySelectorAll("button").forEach((item) => item.classList.toggle("on", item === button));
+  moveRangeThumb();
+  loadOverview().catch(() => {});
+});
+function moveRangeThumb() {
+  const on = $("#ov-range .on");
+  if (!on || !on.offsetWidth) return;
+  $("#ov-range .ov-seg-thumb").style.left = `${on.offsetLeft}px`;
+  $("#ov-range .ov-seg-thumb").style.width = `${on.offsetWidth}px`;
+}
+$("#ov-chart-stats").addEventListener("click", (event) => {
+  const filter = event.target.closest("[data-ov-rule]");
+  if (!filter) return;
+  overviewRule = filter.dataset.ovRule;
+  loadOverview().catch(() => {});
+});
+$("#ov-rank").addEventListener("click", (event) => {
+  const id = event.target.closest("[data-edit]")?.dataset.edit;
+  const rule = id && state.rules.find((item) => item.id === id);
+  if (rule) openRuleDialog(null, rule);
+});
+$("#ov-chart").addEventListener("mousemove", showOverviewTip);
+$("#ov-chart").addEventListener("mouseleave", () => $("#ov-tip").classList.remove("show"));
+$("#goals-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = $("#goals-status");
+  try {
+    const saved = await request("/api/settings", { method: "PATCH", body: JSON.stringify({ dmDailyGoal: form.elements.dmDailyGoal.value, leadMonthlyGoal: form.elements.leadMonthlyGoal.value }) });
+    state.settings = { ...state.settings, ...saved };
+    status.textContent = "Metas salvas ✓";
+    await loadOverview();
+  } catch (error) { status.textContent = error.message; }
+});
+window.addEventListener("resize", moveRangeThumb);
+
 // ── Publicar Reels ──────────────────────────────────────────────────────────
 const POST_STATUS = { scheduled: ["AGENDADO", "scheduled"], publishing: ["PUBLICANDO…", "publishing"], published: ["PUBLICADO", "published"], failed: ["FALHOU", "failed"] };
 let publishFile = null;
@@ -1289,6 +1675,8 @@ async function loadPosts() {
   $("#publish-quota").textContent = quota?.total ? `${quota.used} de ${quota.total} publicações nas últimas 24 h` : "";
   renderPosts();
   renderStatusStrip();
+  renderOverviewQueue();
+  renderOverviewSummary();
   const pending = posts.filter((post) => post.status === "scheduled" || post.status === "publishing" || post.status === "failed").length;
   $("#nav-badge-posts").hidden = !pending;
   $("#nav-badge-posts").textContent = pending;
@@ -1336,10 +1724,6 @@ function renderPosts() {
   }).join("") : '<p class="empty">Nenhum Reel na fila ainda.</p>';
 }
 
-$("#status-strip").addEventListener("click", (event) => {
-  const view = event.target.closest("[data-go-view]")?.dataset.goView;
-  if (view) document.querySelector(`nav button[data-view="${view}"]`)?.click();
-});
 $("#publish-file").addEventListener("change", (event) => setPublishFile(event.target.files[0]));
 $("#video-drop").addEventListener("dragover", (event) => { event.preventDefault(); event.currentTarget.classList.add("dragging"); });
 $("#video-drop").addEventListener("dragleave", (event) => event.currentTarget.classList.remove("dragging"));
@@ -1440,5 +1824,7 @@ $("#posts-list").addEventListener("click", async (event) => {
 });
 syncPublishForm();
 
-await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit(), loadContentRoi(), loadWebhookSettings(), loadPosts().catch(() => {})]);
+await Promise.all([renderDashboard(), loadMedia(), loadContacts(), loadAnalytics(), loadModeration(), loadCampaigns(), loadLeads(), loadHealth(), loadAudit(), loadContentRoi(), loadWebhookSettings(), loadPosts().catch(() => {}), loadOverview().catch((error) => console.error(error))]);
+renderTopbar();
+moveRangeThumb();
 renderPipeline();

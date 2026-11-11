@@ -53,7 +53,21 @@ const FIELD_VALIDATORS = {
   metaCapiToken(value) {
     return String(value ?? "").trim();
   },
+  // metas da visão geral — vazio/0 desliga a meta (o gráfico some com a linha tracejada)
+  dmDailyGoal(value) {
+    return parseGoal(value, 100_000, "A meta de DMs por dia");
+  },
+  leadMonthlyGoal(value) {
+    return parseGoal(value, 1_000_000, "A meta de leads por mês");
+  },
 };
+
+function parseGoal(value, max, label) {
+  if (value === "" || value === null || value === undefined) return 0;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0 || number > max) throw new AppError(`${label} precisa ser um número inteiro entre 0 e ${max.toLocaleString("pt-BR")}.`);
+  return number;
+}
 
 // Only keys actually present in `input` are validated and returned — settings are saved
 // through separate small forms (webhook, Pixel/CAPI), so a partial PATCH must never wipe
