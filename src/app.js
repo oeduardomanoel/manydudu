@@ -29,6 +29,7 @@ import { sanitizeHtml } from "./util/html.js";
 import { safeFilename } from "./util/filename.js";
 import { renderContentPage, renderGatePage, renderNotFound } from "./pages/gate.js";
 import { renderSetupPage } from "./pages/setup.js";
+import { renderMaterialsPage } from "./pages/materials.js";
 import { upsertEnvFile } from "./util/env-file.js";
 import { debugToken } from "./meta/token-refresh.js";
 import { checkPassword, clearCsrfCookie, clearLoginAttempts, clearSessionCookie, createAccessCookie, createCsrfCookie, createSessionCookie, getClientIp, hashPassword, isLeadRateLimited, isLoginRateLimited, isSecureRequest, isSetupRateLimited, isSetupRequestAuthorized, readAccessSlugs, readSession, recordFailedLogin, recordLeadSubmission, recordSetupAttempt, verifyCsrf, verifyPasswordHash } from "./auth.js";
@@ -120,6 +121,12 @@ export function createApp({ store, meta, config, serveStatic, scheduler = null, 
     const url = new URL(request.url, "http://localhost");
     applySecurityHeaders(request, response);
     try {
+      if (request.method === "GET" && /^\/(materiais|blog)\/?$/.test(url.pathname)) {
+        // página pública dos materiais — só dados que já são públicos em /c/:slug (ver publicMaterials)
+        const [campaigns, settings] = await Promise.all([store.listCampaigns(), store.getSettings()]);
+        response.setHeader("Cache-Control", "public, max-age=60");
+        return html(response, 200, renderMaterialsPage(campaigns, settings, { origin: publicBaseUrl(request) }));
+      }
       const campaignPath = url.pathname.match(/^\/c\/([a-z0-9-]+)$/);
       if (request.method === "GET" && campaignPath) {
         const campaign = await store.getCampaignBySlug(campaignPath[1]);
