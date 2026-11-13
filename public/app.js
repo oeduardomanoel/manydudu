@@ -78,6 +78,7 @@ async function renderDashboard() {
   state.activity = dashboard.activity;
   renderActivity(dashboard.activity);
   renderKeywordSuggestions(dashboard.keywordSuggestions || []);
+  loadAds().catch(() => {});
 }
 
 function renderKeywordSuggestions(suggestions) {
@@ -1205,6 +1206,29 @@ $("#pipeline-board").addEventListener("drop", async (event) => {
     if (record) record.stage = stage;
     renderPipeline();
   } catch (error) { alert(error.message); }
+});
+
+// ── Anúncios (vistos pelos comentários) ─────────────────────────────────────
+async function loadAds() {
+  const { ads } = await request("/api/ads");
+  state.ads = ads;
+  $("#ads-block").hidden = !ads.length;
+  $("#ads-list").innerHTML = ads.map((ad) => {
+    const title = ad.adTitle || "Anúncio sem título";
+    const status = ad.rule
+      ? `<span class="ad-status on">Automação “${escapeHtml(ad.rule.name)}”${ad.rule.enabled ? "" : " · pausada"}</span><button class="edit-rule" data-ad-edit="${escapeHtml(ad.rule.id)}">Editar</button>`
+      : `<span class="ad-status off">Sem automação</span><button class="edit-rule" data-ad-create="${escapeHtml(ad.adId)}">Criar automação</button>`;
+    return `<article class="ad-row"><div><h3>${escapeHtml(title)}</h3><p>${fmt(ad.comments)} comentário${ad.comments === 1 ? "" : "s"} de ${fmt(ad.people)} pessoa${ad.people === 1 ? "" : "s"} · último ${relativeTime(ad.lastCommentAt)}${ad.originalMediaId ? " · Reel impulsionado" : " · criado no Gerenciador"}</p></div><div class="rule-actions">${status}</div></article>`;
+  }).join("");
+}
+
+$("#ads-list").addEventListener("click", (event) => {
+  const editId = event.target.closest("[data-ad-edit]")?.dataset.adEdit;
+  const createId = event.target.closest("[data-ad-create]")?.dataset.adCreate;
+  if (editId) { const rule = state.rules.find((item) => item.id === editId); if (rule) openRuleDialog(null, rule); return; }
+  const ad = createId && (state.ads || []).find((item) => item.adId === createId);
+  // Reel impulsionado: prende no post de origem (vale pro orgânico e pro anúncio); senão, na mídia do anúncio
+  if (ad) openRuleDialog({ id: ad.originalMediaId || ad.mediaId, caption: `Anúncio: ${ad.adTitle || "sem título"}` });
 });
 
 // ── Visão geral (v3) ────────────────────────────────────────────────────────

@@ -35,7 +35,12 @@ export function extractComments(payload) {
       if (change.field !== "comments" || !change.value?.id) continue;
       comments.push({ id: String(change.value.id), text: String(change.value.text ?? ""),
         authorId: String(change.value.from?.id ?? ""), username: change.value.from?.username ? String(change.value.from.username) : null,
-        mediaId: String(change.value.media?.id ?? "") });
+        mediaId: String(change.value.media?.id ?? ""),
+        // comentário em anúncio (post impulsionado ou criado no Gerenciador): a Meta manda o anúncio
+        // e o post de origem — a mídia comentada pode não ser o mesmo id do post
+        adId: change.value.media?.ad_id ? String(change.value.media.ad_id) : null,
+        adTitle: change.value.media?.ad_title ? String(change.value.media.ad_title).slice(0, 200) : null,
+        originalMediaId: change.value.media?.original_media_id ? String(change.value.media.original_media_id) : null });
     }
   }
   return comments;

@@ -289,3 +289,13 @@ body.side-collapsed .today-card{justify-content:center;padding:10px 0}
 dialog{background:color-mix(in srgb,var(--surface) 96%,#fff)}
 #view-dashboard>.onboarding-card{border:1px solid var(--strong);border-radius:var(--r);background:linear-gradient(135deg,var(--acc-soft),var(--surface) 60%);box-shadow:inset 0 1px 0 var(--hi)}
 #view-dashboard>.onboarding-card .eyebrow{color:var(--acc)}
+
+/* anúncios vistos pelos comentários */
+.ads-list{display:grid;gap:2px}
+.ad-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:14px;padding:13px 4px;border-bottom:1px solid var(--line)}
+.ad-row h3{margin:0 0 4px;font-size:13px;font-weight:500}
+.ad-row p{margin:0;color:var(--muted);font-size:11px}
+.ad-status{font-size:11px;font-weight:500;margin-right:4px}
+.ad-status.on{color:var(--green)}
+.ad-status.off{color:var(--yellow)}
+@media(max-width:680px){.ad-row{grid-template-columns:1fr}}

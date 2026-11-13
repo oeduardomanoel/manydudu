@@ -48,7 +48,7 @@ test("extracts comment changes from Instagram webhook payload", () => {
     media: { id: "media-1" }
   } }] }] };
   assert.deepEqual(extractComments(payload), [{
-    id: "comment-1", text: "Quero", authorId: "user-1", username: "ana", mediaId: "media-1"
+    id: "comment-1", text: "Quero", authorId: "user-1", username: "ana", mediaId: "media-1", adId: null, adTitle: null, originalMediaId: null
   }]);
 });
 
@@ -58,7 +58,7 @@ test("extracts a comment with a null username when Instagram doesn't send one", 
     media: { id: "media-1" }
   } }] }] };
   assert.deepEqual(extractComments(payload), [{
-    id: "comment-2", text: "Quero", authorId: "user-2", username: null, mediaId: "media-1"
+    id: "comment-2", text: "Quero", authorId: "user-2", username: null, mediaId: "media-1", adId: null, adTitle: null, originalMediaId: null
   }]);
 });
 

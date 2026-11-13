@@ -8,6 +8,7 @@ import { createPost, MAX_VIDEO_BYTES, UPLOAD_ID, VIDEO_TYPES } from "./domain/pu
 import { createRule, findMatchingRule, personalize, selectPublicReply, suggestKeywords, updateRule } from "./domain/automation.js";
 import { buildAnalytics, buildKpis } from "./domain/analytics.js";
 import { overview } from "./domain/daily-stats.js";
+import { summarizeAds } from "./domain/ads.js";
 import { extractComments, extractMessages, extractPostbacks, parseSignedRequest, verifyMetaSignature } from "./meta/webhook.js";
 import { createCampaign, createLead, updateCampaign } from "./domain/campaigns.js";
 import { exportPackage, parsePackage } from "./domain/automation-package.js";
@@ -362,6 +363,10 @@ export function createApp({ store, meta, config, serveStatic, scheduler = null, 
         }
         return json(response, 200, { ok: true, total: contacts.length, cleaned, attempted, resolved });
       }
+      if (request.method === "GET" && url.pathname === "/api/ads") {
+        const state = await store.read();
+        return json(response, 200, { ads: summarizeAds(state.contacts ?? {}, state.rules ?? []) });
+      }
       if (request.method === "GET" && url.pathname === "/api/overview") {
         const range = ["14d", "30d", "13w"].includes(url.searchParams.get("range")) ? url.searchParams.get("range") : "14d";
         return json(response, 200, overview(await store.read(), { range, ruleId: url.searchParams.get("rule") || null }));
@@ -625,15 +630,16 @@ export async function processComments(comments, store, meta) {
         catch { username = null; }
       }
     }
+    const ad = comment.adId ? { adId: comment.adId, adTitle: comment.adTitle, originalMediaId: comment.originalMediaId } : {};
     if (comment.authorId) await store.recordContactEvent({ contactId: comment.authorId, username,
-      type: "comment", text: comment.text, mediaId: comment.mediaId, at: new Date().toISOString() });
+      type: "comment", text: comment.text, mediaId: comment.mediaId, ...ad, at: new Date().toISOString() });
     if (comment.authorId && await store.isContactPaused(comment.authorId)) {
-      await store.log({ id: comment.id, username, text: comment.text, mediaId: comment.mediaId,
+      await store.log({ id: comment.id, username, text: comment.text, mediaId: comment.mediaId, ...ad,
         status: "ignored", reason: "human_takeover", at: new Date().toISOString() });
       continue;
     }
-    const { rules, activity = [] } = await store.read(); const rule = findMatchingRule(comment.text, rules, comment.mediaId);
-    const context = { id: comment.id, username, text: comment.text, mediaId: comment.mediaId, at: new Date().toISOString() };
+    const { rules, activity = [] } = await store.read(); const rule = findMatchingRule(comment.text, rules, [comment.mediaId, comment.originalMediaId]);
+    const context = { id: comment.id, username, text: comment.text, mediaId: comment.mediaId, ...ad, at: new Date().toISOString() };
     if (!rule) { await store.log({ ...context, status: "ignored" }); continue; }
     if (comment.authorId && ["private", "both"].includes(rule.responseMode)) {
       const contact = await store.getContact(comment.authorId);

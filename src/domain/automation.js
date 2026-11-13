@@ -5,9 +5,12 @@ export function normalizeText(value = "") {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 }
 
+// mediaId pode ser uma lista: num anúncio vale tanto a mídia do anúncio quanto o post de origem,
+// então uma automação presa ao Reel também responde quem comentou no anúncio desse Reel.
 export function findMatchingRule(text, rules, mediaId = null) {
   const comment = normalizeText(text);
-  const eligible = rules.filter((rule) => !rule.mediaId || rule.mediaId === mediaId);
+  const mediaIds = [mediaId].flat().filter(Boolean).map(String);
+  const eligible = rules.filter((rule) => !rule.mediaId || mediaIds.includes(String(rule.mediaId)));
   eligible.sort((left, right) => Number(Boolean(right.mediaId)) - Number(Boolean(left.mediaId)));
   return eligible.find((rule) => {
     if (!rule.enabled) return false;

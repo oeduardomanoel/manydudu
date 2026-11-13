@@ -78,6 +78,11 @@
     <section class="media-section" id="contents">
       <div class="section-head"><div><p class="eyebrow">BIBLIOTECA DO INSTAGRAM</p><h2>Escolha onde a conversa começa.</h2></div><div class="filters"><button class="filter active" data-filter="REELS">Reels</button><button class="filter" data-filter="ALL">Todos</button><button class="icon-btn refresh" id="refresh-media" title="Atualizar conteúdos">↻</button></div></div>
       <div id="media-grid" class="media-grid"><div class="media-loading">Buscando seus conteúdos no Instagram…</div></div>
+      <div class="ads-block" id="ads-block" hidden>
+        <div class="section-head" style="margin-top:26px"><div><p class="eyebrow">ANÚNCIOS</p><h2>Anúncios que receberam comentários</h2></div></div>
+        <p class="hint">O Instagram não lista anúncios junto dos posts — eles aparecem aqui assim que chega o primeiro comentário. Anúncio de um Reel impulsionado já usa a automação do Reel.</p>
+        <div id="ads-list" class="ads-list"></div>
+      </div>
     </section>
     <section class="moderation-section" id="moderation">
       <div class="section-head"><div><p class="eyebrow">MODERAÇÃO</p><h2>Comentários recentes</h2></div><div class="moderation-tools"><input id="moderation-search" type="search" placeholder="Buscar comentário ou pessoa"><select id="moderation-filter"><option value="all">Todos</option><option value="visible">Visíveis</option><option value="hidden">Ocultos</option></select><button class="icon-btn" id="refresh-comments" title="Atualizar comentários">↻</button></div></div>
