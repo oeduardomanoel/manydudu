@@ -156,3 +156,10 @@ test("personalize drops {nome} cleanly when the username is unknown", () => {
   assert.equal(personalize("Oi {nome}! Te mandei", { keyword: "x" }), "Oi! Te mandei");
   assert.equal(personalize(undefined, {}), "");
 });
+
+test("multi-word keywords match regardless of spacing", () => {
+  const rules = [{ id: "r", keyword: "reel pronto", match: "contains", enabled: true }];
+  for (const text of ["REEL PRONTO", "reelpronto", "Reel  pronto!", "quero o réel prónto"]) assert.equal(findMatchingRule(text, rules)?.id, "r", text);
+  assert.equal(findMatchingRule("pronto", rules), undefined);
+  assert.equal(findMatchingRule("reel  pronto", [{ id: "e", keyword: "Reel Pronto", match: "exact", enabled: true }])?.id, "e");
+});

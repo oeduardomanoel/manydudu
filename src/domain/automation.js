@@ -12,10 +12,12 @@ export function findMatchingRule(text, rules, mediaId = null) {
   const mediaIds = [mediaId].flat().filter(Boolean).map(String);
   const eligible = rules.filter((rule) => !rule.mediaId || mediaIds.includes(String(rule.mediaId)));
   eligible.sort((left, right) => Number(Boolean(right.mediaId)) - Number(Boolean(left.mediaId)));
+  // espaços não contam: "reelpronto" e "reel  pronto" (digitado rápido no celular) batem com "reel pronto"
+  const compact = comment.replace(/\s+/g, "");
   return eligible.find((rule) => {
     if (!rule.enabled) return false;
-    const keyword = normalizeText(rule.keyword);
-    return rule.match === "exact" ? comment === keyword : comment.includes(keyword);
+    const keyword = normalizeText(rule.keyword).replace(/\s+/g, "");
+    return rule.match === "exact" ? compact === keyword : compact.includes(keyword);
   });
 }
 
