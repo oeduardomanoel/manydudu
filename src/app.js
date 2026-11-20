@@ -516,7 +516,9 @@ export function createApp({ store, meta, config, serveStatic, scheduler = null, 
         let storeStatus; let metaToken = null; let lastEventAt = null;
         try {
           const state = await store.read();
-          storeStatus = { ok: true, backend: store.backend, latencyMs: Date.now() - started };
+          storeStatus = store.syncError
+            ? { ok: false, backend: store.backend, error: `Rodando na cópia local; Supabase sem sincronizar: ${store.syncError}` }
+            : { ok: true, backend: store.backend, latencyMs: Date.now() - started };
           metaToken = state.metaToken ?? null;
           lastEventAt = state.activity?.[0]?.at ?? null;
         } catch (error) {
